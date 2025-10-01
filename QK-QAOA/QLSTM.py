@@ -16,8 +16,8 @@ class QLSTM(nn.Module):
         batch_first=True,
         return_sequences=False,
         return_state=False,
-        backend="lightning.qubit",
-        device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
+        backend="lightning.gpu",
+        device=torch.device("cuda:1"),
     ):
         super(QLSTM, self).__init__()
         self.n_inputs = input_size
