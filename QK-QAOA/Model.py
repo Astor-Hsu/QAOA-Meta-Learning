@@ -1,6 +1,7 @@
 import QAOA
 import QKLSTM
 import QLSTM
+import FWP
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -8,7 +9,7 @@ import torch.optim as optim
 import numpy as np 
 import time
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
 
 class DNN(nn.Module):
     def __init__(self, input_shape, out_shape, hidden_dims = [16, 12]):
@@ -92,15 +93,11 @@ class LSTM(nn.Module):
         current_cost = torch.zeros((1, 1), dtype = torch.float32).to(device)
         current_params = torch.zeros((1, self.input_feature_dim), dtype = torch.float32).to(device)
 
-        if self.model_type == "QK":
+        if self.model_type in ["QK", "VQC"]:
             hidden_state_size = self.input_feature_dim + 1
         else:
             hidden_state_size = self.input_feature_dim
 
-        if self.model_type == "VQC":
-            hidden_state_size = self.input_feature_dim + 1
-        else:
-            hidden_state_size = self.input_feature_dim
 
         current_h = torch.zeros((self.lstm.num_layers, 1, hidden_state_size), dtype = torch.float32).to(device)
         current_c = torch.zeros((self.lstm.num_layers, 1, hidden_state_size), dtype = torch.float32).to(device)
@@ -164,18 +161,97 @@ class LSTM(nn.Module):
         else:
             return loss
 
+
+
+class FWPWrapper(nn.Module):
+    """
+    FWP Wrapper (no hidden_state needed)
+    """
+    def __init__(self, mapping_type="ID", input_feature_dim=0, max_total_params=0,
+                 loss_function_type="weighted", layers=1):
+        super().__init__()
+        self.model_type = "FWP"
+        self.mapping_type = mapping_type
+        self.input_feature_dim = input_feature_dim
+        self.max_total_params = max_total_params
+        self.loss_function_type = loss_function_type
+        self.layers = layers
+
+        # FWP 模型
+        self.fwp = FWP.FWP(
+            s_dim=self.input_feature_dim + 1,  
+            a_dim=self.input_feature_dim,   
+            n_qubits=4,
+            n_layers=self.layers,
+            backend="default.qubit",
+            device=device
+        ).to(device)
+
+        # mapping 
+        if self.mapping_type == "Linear":
+            self.mapping = nn.Linear(self.input_feature_dim, self.max_total_params).to(device)
+        elif self.mapping_type == "DNN":
+            self.mapping = DNN(self.input_feature_dim, self.max_total_params).to(device)
+        elif self.mapping_type == "ID":
+            self.mapping = nn.Identity().to(device)
+
+    def forward(self, molecule_cost, num_iteration, intermediate_steps=False):
+        # 初始化 cost / params
+        current_cost = torch.zeros((1, 1), dtype=torch.float32).to(device)
+        current_params = torch.zeros((1, self.input_feature_dim), dtype=torch.float32).to(device)
+
+        param_outputs, cost_outputs = [], []
+
+        for _ in range(num_iteration):
+            # (batch, s_dim)
+            new_input = torch.cat([current_cost, current_params.view(current_params.size(0), -1)], dim=1)
+
+            #  seq_len=1 → (batch, 1, s_dim)
+            new_input = new_input.unsqueeze(1)
+
+            # FWP forward
+            new_params = self.fwp(new_input)  # (batch, a_dim)
+
+            params = self.mapping(new_params).to(device)
+            _cost = molecule_cost(params.squeeze(0).to(device))
+            new_cost = torch.as_tensor(_cost, dtype=torch.float32, device=device).view(1, 1)      
+            param_outputs.append(params)
+            cost_outputs.append(new_cost)
+            current_cost = new_cost
+            current_params = new_params
+
+        # === loss ===
+        loss = 0.0
+        if self.loss_function_type == "weighted":
+            for t in range(len(cost_outputs)):
+                coeff = 0.1 * (t + 1)
+                loss += cost_outputs[t] * coeff
+            loss = loss / len(cost_outputs)
+
+        elif self.loss_function_type == "observed improvement":
+            cost = torch.stack(cost_outputs).to(device)
+            zero = torch.tensor([0.0], device=device)
+            for t in range(1, len(cost_outputs)):
+                f_j = torch.min(cost[:t])
+                penalty = torch.minimum(cost[t] - f_j, zero)
+                loss += penalty
+            loss = loss / len(cost_outputs)
+
+        return (param_outputs, loss) if intermediate_steps else loss
+
+
 class ModelTrain:
     """
     Train and evaluate model
     """
-    def __init__(self, model, qaoa_layers, lr_lstm = 0.01, lr_mapping = 0.01, num_rnn_iteration = 5):
+    def __init__(self, model, qaoa_layers, lr_lstm=0.01, lr_mapping=0.01, num_rnn_iteration=5):
         """
         Args:
          model [model]
-         lr_lstm [float]: learning rate of LSTM or QK
+         lr_lstm [float]: learning rate of LSTM or QK/FWP
          lr_mapping [float]: learning rate of linear model
-         num_rnn_iteration [int]: number of RNN recurrent
-         optimizer: ADAM
+         num_rnn_iteration [int]: number of recurrent (or iteration) steps
+         optimizer: Adam or RMSprop
         """
         self.model = model
         self.model.to(device)
@@ -184,50 +260,52 @@ class ModelTrain:
         self.lr_mapping = lr_mapping
         self.num_rnn_iteration = num_rnn_iteration
 
-        if self.model.mapping_type == "DS":
+        # === Optimizer learning rates ===
+        if self.model.model_type == "FWP":
             learning_rate = [
-                {'params':self.model.lstm.parameters(), 'lr': self.lr_lstm},
-                {'params':self.model.single_mapping.parameters(), 'lr': self.lr_mapping},
-                {'params':self.model.double_mapping.parameters(), 'lr': self.lr_mapping}
-                    ]
+                {'params': self.model.fwp.parameters(), 'lr': self.lr_lstm},
+                {'params': self.model.mapping.parameters(), 'lr': self.lr_mapping}
+            ]
+        elif self.model.mapping_type == "DS":
+            learning_rate = [
+                {'params': self.model.lstm.parameters(), 'lr': self.lr_lstm},
+                {'params': self.model.single_mapping.parameters(), 'lr': self.lr_mapping},
+                {'params': self.model.double_mapping.parameters(), 'lr': self.lr_mapping}
+            ]
         elif self.model.mapping_type == "ID":
             learning_rate = [
-                {'params':self.model.lstm.parameters(), 'lr': self.lr_lstm},
-                 ]
+                {'params': self.model.lstm.parameters(), 'lr': self.lr_lstm},
+            ]
         else:
             learning_rate = [
-                 {'params':self.model.lstm.parameters(), 'lr': self.lr_lstm},
-                 {'params':self.model.mapping.parameters(), 'lr': self.lr_mapping}
-                 ]
-        
-        if self.model.model_type == "LSTM":
-            self.optimizer = optim.Adam(learning_rate) 
-            #self.optimizer = optim.RMSprop(learning_rate) 
-        elif self.model.model_type == "QK":
-            self.optimizer = optim.RMSprop(learning_rate) 
-            #self.optimizer = optim.Adam(learning_rate) 
-        elif self.model.model_type == "VQC":
-            self.optimizer = optim.RMSprop(learning_rate) 
+                {'params': self.model.lstm.parameters(), 'lr': self.lr_lstm},
+                {'params': self.model.mapping.parameters(), 'lr': self.lr_mapping}
+            ]
 
+        # === Choose optimizer by model type ===
+        if self.model.model_type == "LSTM":
+            self.optimizer = optim.Adam(learning_rate)
+        elif self.model.model_type == "QK":
+            self.optimizer = optim.RMSprop(learning_rate)
+        elif self.model.model_type == "VQC":
+            self.optimizer = optim.RMSprop(learning_rate)
+        elif self.model.model_type == "FWP":
+            self.optimizer = optim.RMSprop(learning_rate)
+
+        # === Learning rate scheduler ===
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, mode='min', factor=0.5, patience=3, threshold=1e-3, min_lr=1e-7)
+            self.optimizer, mode='min', factor=0.5,
+            patience=3, threshold=1e-3, min_lr=1e-7
+        )
 
     def train_step(self, loss_qnode, num_rnn_iteration):
         self.optimizer.zero_grad()
         loss = self.model(loss_qnode, num_rnn_iteration).to(device)
         loss.backward()
-
         self.optimizer.step()
-
         return loss
 
-    def train(self, train_data, val_data, epochs = 5, conv_tol_lstm = 1e-5, time_out = 3600):
-        """
-        Args:
-         train_data [list]: train set
-         epochs [int]: number of epochs
-         conv_tol_lstm [float]: the convergence tolerance of LSTM or QK
-        """
+    def train(self, train_data, val_data, epochs=5, conv_tol_lstm=1e-5, time_out=3600):
         self.model.train()
         previous_mean_loss = None
         mean_loss_history = []
@@ -241,98 +319,80 @@ class ModelTrain:
             elapsed_time = time.time() - start_time
             if elapsed_time > time_out:
                 print(f"Training stopped after {epoch+1}/{epochs}")
-                print(f"mean loss:{mean_loss_history}")
-                print(f"mean val loss:{val_loss_history}")
-                break 
-            
-            if epoch%1 == 0:
-                print(f"Epoch {epoch+1}/{epochs}")
+                break
 
+            print(f"Epoch {epoch+1}/{epochs}")
             epoch_loss = []
             for i, graph_data in enumerate(train_data):
-                qaoa = QAOA.QAOA(graph = graph_data, 
-                         n_layers = self.qaoa_layers, 
-                         with_meta=  True)
-                
+                qaoa = QAOA.QAOA(graph=graph_data,
+                                 n_layers=self.qaoa_layers,
+                                 with_meta=True)
+
                 loss_qnode = qaoa.get_loss_function()
                 loss = self.train_step(loss_qnode, self.num_rnn_iteration)
                 epoch_loss.append(loss.item())
 
                 if (i+1) % 200 == 0:
                     print(f" > Molecule {i+1}/{len(train_data)} - Loss: {loss.item():.8f}")
-                
-            #epoch_loss = np.array(epoch_loss)
+
             mean_loss = np.mean(epoch_loss)
             mean_loss_history.append(mean_loss)
-            
+
+            # === validation ===
             self.model.eval()
             val_loss = 0
             for i, graph_data in enumerate(val_data):
-                qaoa = QAOA.QAOA(graph = graph_data, 
-                         n_layers = self.qaoa_layers, 
-                         with_meta=  True)
-                
+                qaoa = QAOA.QAOA(graph=graph_data,
+                                 n_layers=self.qaoa_layers,
+                                 with_meta=True)
+
                 loss_qnode = qaoa.get_loss_function()
-                params, loss = self.model(loss_qnode, self.num_rnn_iteration, intermediate_steps = True)
+                params, loss = self.model(loss_qnode, self.num_rnn_iteration, intermediate_steps=True)
                 cost = loss_qnode(params[-1]).item()
-                val_loss+= cost
-                mean_val_loss = val_loss/len(val_data)
+                val_loss += cost
+            mean_val_loss = val_loss / len(val_data)
             val_loss_history.append(mean_val_loss)
             self.model.train()
 
             self.scheduler.step(mean_val_loss)
 
-            if epoch % 1 == 0:
-                print(f"Epoch {epoch+1} Mean loss: {mean_loss:.8f}, Mean val loss:{mean_val_loss:.8f}")
-                lr_lstm = self.optimizer.param_groups[0]['lr']
-                print(f"Current learning rate: {lr_lstm:.10f}")
+            print(f"Epoch {epoch+1} Mean loss: {mean_loss:.8f}, Mean val loss:{mean_val_loss:.8f}")
+            lr_current = self.optimizer.param_groups[0]['lr']
+            print(f"Current learning rate: {lr_current:.10f}")
 
+            # === early stopping / convergence ===
             if previous_mean_loss is not None:
-                change = abs(previous_mean_loss - mean_loss)/abs(previous_mean_loss+1e-10)
-                #change = abs(previous_mean_loss - mean_loss)
+                change = abs(previous_mean_loss - mean_loss) / (abs(previous_mean_loss)+1e-10)
                 if change <= conv_tol_lstm:
-                    print(f"Traning converged at epoch {epoch+1}")
-                    print(f"mean loss:{mean_loss_history}")
-                    print(f"mean val loss:{val_loss_history}")
+                    print(f"Training converged at epoch {epoch+1}")
                     break
-                
+
             if mean_val_loss < best_val_loss:
                 best_val_loss = mean_val_loss
                 patience = 0
                 torch.save(self.model.state_dict(), f'best_{self.model.model_type}_model.pth')
             else:
-                patience +=1
-                print(f"patience:{patience}")
-                if patience >=6:
+                patience += 1
+                if patience >= 6:
                     print(f"Early stopping triggered at epoch {epoch+1}")
-                    print(f"mean loss:{mean_loss_history}")
-                    print(f"mean val loss:{val_loss_history}")
                     break
 
             previous_mean_loss = mean_loss
 
-        print(f"mean loss:{mean_loss_history}")
-        print(f"mean val loss:{val_loss_history}")
+        print(f"Final mean loss history: {mean_loss_history}")
+        print(f"Final val loss history: {val_loss_history}")
 
-    def evaluate(self, graph_data, num_rnn_iteration = 5):
-        """
-        Args:
-         molecule_data [list]: molecule data from test set
-         num_rnn_iteration [float]: number of RNN recurrent
-        Outputs:
-         lstm_guesses [list]: params predicted by model
-         lstm_energies [list]: energies predicted by model
-        """
+    def evaluate(self, graph_data, num_rnn_iteration=5):
         self.model.eval()
         print(f"\n--- Starting {self.model.model_type} Model Testing ---")
-        qaoa = QAOA.QAOA(graph = graph_data, 
-                         n_layers = self.qaoa_layers, 
-                         with_meta=  True)
-        
+        qaoa = QAOA.QAOA(graph=graph_data,
+                         n_layers=self.qaoa_layers,
+                         with_meta=True)
+
         loss_qnode = qaoa.get_loss_function()
         with torch.no_grad():
-            params, loss = self.model(loss_qnode, num_rnn_iteration, intermediate_steps = True)
-        
+            params, loss = self.model(loss_qnode, num_rnn_iteration, intermediate_steps=True)
+
         lstm_guesses = [p.squeeze(0) for p in params]
         lstm_energies = [loss_qnode(guess).item() for guess in lstm_guesses]
 

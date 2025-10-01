@@ -70,44 +70,9 @@ class QLSTM(nn.Module):
     def _build_circuit(self, gate_type):
         def circuit(inputs, weights):
             wires = self.quantum_wires[gate_type]
-            # Forward pass
-            # for layer in range(self.n_qlayers):
-            #     for i in range(len(wires)):
-            #         qml.RX(weights[layer, i], wires=wires[i])
-            #         qml.RY(weights[layer, i], wires=wires[i])
-            #         qml.RZ(weights[layer, i], wires=wires[i])
-            
-            # for wire in wires:
-            #     qml.Hadamard(wires=wire)
-            # qml.templates.AngleEmbedding(
-            #     torch.cos(inputs**2), wires=wires, rotation="Z"
-            # )
-            # qml.templates.AngleEmbedding(
-            #     torch.cos(inputs**2), wires=wires, rotation="Y"
-            # )
-            # for i in range(len(wires) - 1):
-            #     qml.CNOT(wires=[wires[i], wires[i + 1]])
-
-            #for i in range(len(wires) - 1, -1, -1):
-            #    for j in range(len(wires) - 1, i, -1):
-            #        qml.CNOT(wires=[wires[i], wires[j]])
-
             qml.templates.AngleEmbedding(inputs, wires=wires)
             qml.templates.BasicEntanglerLayers(weights, wires=wires)
-            # Inverse pass
-            # qml.adjoint(qml.templates.AngleEmbedding)(torch.cos(inputs**2), wires=wires, rotation="Z")#inputs
-            # for i in range(len(wires) - 1, 0, -1):
-            #     qml.CNOT(wires=[wires[i - 1], wires[i]])
-            # #for i in range(len(wires) - 1, -1, -1):
-            # #    for j in range(len(wires) - 1, i, -1):
-            # #        qml.CNOT(wires=[wires[i], wires[j]])
-
-            # qml.adjoint(qml.templates.AngleEmbedding)(torch.cos(inputs**2), wires=wires, rotation="Y")
-            # qml.adjoint(qml.templates.AngleEmbedding)(torch.cos(inputs**2), wires=wires, rotation="Z")
-            # for wire in wires:
-            #     qml.Hadamard(wires=wire)
-            # qml.templates.AngleEmbedding(inputs, wires=wires)
-            # qml.templates.BasicEntanglerLayers(weights, wires=wires)
+          
             results = [qml.expval(qml.PauliZ(wires=wire)) for wire in wires]
             return results
 
