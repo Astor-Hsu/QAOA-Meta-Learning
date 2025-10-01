@@ -1,5 +1,6 @@
 import QAOA
 import QKLSTM
+import QLSTM
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -65,7 +66,14 @@ class LSTM(nn.Module):
                                hidden_size = self.input_feature_dim+1,
                                n_qubits = 4,
                                n_qlayers = self.layers)
-        
+
+        elif self.model_type == "VQC":
+            self.lstm = QLSTM.QLSTM(input_size = self.input_feature_dim+1 ,
+                               hidden_size = self.input_feature_dim+1,
+                               n_qubits = 4,
+                               n_qlayers = self.layers)
+
+
         if self.mapping_type == "Linear":
             self.mapping = nn.Linear(self.input_feature_dim, self.max_total_params, bias = True).to(device)
         elif self.mapping_type == "DNN":
@@ -89,6 +97,11 @@ class LSTM(nn.Module):
         else:
             hidden_state_size = self.input_feature_dim
 
+        if self.model_type == "VQC":
+            hidden_state_size = self.input_feature_dim + 1
+        else:
+            hidden_state_size = self.input_feature_dim
+
         current_h = torch.zeros((self.lstm.num_layers, 1, hidden_state_size), dtype = torch.float32).to(device)
         current_c = torch.zeros((self.lstm.num_layers, 1, hidden_state_size), dtype = torch.float32).to(device)
 
@@ -102,7 +115,9 @@ class LSTM(nn.Module):
             
             if self.model_type == "QK":
                 new_params = new_params[:, :-1]
-           
+
+            elif self.model_type == "VQC":
+                new_params = new_params[:, :-1]
             new_params = new_params.squeeze(1) # original
             
             if self.mapping_type == "DS":
@@ -191,6 +206,8 @@ class ModelTrain:
         elif self.model.model_type == "QK":
             self.optimizer = optim.RMSprop(learning_rate) 
             #self.optimizer = optim.Adam(learning_rate) 
+        elif self.model.model_type == "VQC":
+            self.optimizer = optim.RMSprop(learning_rate) 
 
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, mode='min', factor=0.5, patience=3, threshold=1e-3, min_lr=1e-7)
