@@ -6,7 +6,7 @@ import pennylane as qml
 import torch.nn as nn
 
 
-class QLSTM(nn.Module):
+class QKLSTM(nn.Module):
     def __init__(
         self,
         input_size,
@@ -17,9 +17,9 @@ class QLSTM(nn.Module):
         return_sequences=False,
         return_state=False,
         backend="lightning.gpu",
-        device=torch.device("cuda:1"),
+        device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
     ):
-        super(QLSTM, self).__init__()
+        super(QKLSTM, self).__init__()
         self.n_inputs = input_size
         self.hidden_size = hidden_size
         self.concat_size = self.n_inputs + self.hidden_size
@@ -48,10 +48,10 @@ class QLSTM(nn.Module):
         self.clayer_in = nn.Linear(self.concat_size, self.n_qubits).to(device)
         self.clayer_out = nn.Linear(self.n_qubits, self.hidden_size).to(device)
 
-        weight_shapes = {"weights": (self.n_qlayers, self.n_qubits)}
+        weight_shapes = {"weights": (n_qlayers, n_qubits)}
         initial_weights = init.uniform_(torch.empty(n_qlayers, n_qubits), a=-np.pi, b=np.pi).to(device)
        
-        # weight = {"weights": initial_weights}
+        weight = {"weights": initial_weights}
 
         self.quantum_nodes = {
             k: qml.QNode(self._build_circuit(k), dev, interface="torch")
@@ -61,7 +61,7 @@ class QLSTM(nn.Module):
         self.kernel = {
             gate_type: qml.qnn.TorchLayer(
                 self.quantum_nodes[gate_type],
-                weight_shapes ,#weight_shapes
+                weight,#weight_shapes
             ).to(device)
             for gate_type in ["forget", "input", "update", "output"]
         }
@@ -70,9 +70,44 @@ class QLSTM(nn.Module):
     def _build_circuit(self, gate_type):
         def circuit(inputs, weights):
             wires = self.quantum_wires[gate_type]
-            qml.templates.AngleEmbedding(inputs, wires=wires)
-            qml.templates.BasicEntanglerLayers(weights, wires=wires)
-          
+            # Forward pass
+            # for layer in range(self.n_qlayers):
+            #     for i in range(len(wires)):
+            #         qml.RX(weights[layer, i], wires=wires[i])
+            #         qml.RY(weights[layer, i], wires=wires[i])
+            #         qml.RZ(weights[layer, i], wires=wires[i])
+            for wire in wires:
+                qml.Hadamard(wires=wire)
+            qml.templates.AngleEmbedding(
+                torch.cos(inputs**2), wires=wires, rotation="Z"
+            )
+            qml.templates.AngleEmbedding(
+                torch.cos(inputs**2), wires=wires, rotation="Y"
+            )
+            for i in range(len(wires) - 1):
+                qml.CNOT(wires=[wires[i], wires[i + 1]])
+
+            #for i in range(len(wires) - 1, -1, -1):
+            #    for j in range(len(wires) - 1, i, -1):
+            #        qml.CNOT(wires=[wires[i], wires[j]])
+
+            qml.templates.AngleEmbedding(
+                torch.cos(inputs**2), wires=wires, rotation="Z"
+            )
+            # Inverse pass
+            qml.adjoint(qml.templates.AngleEmbedding)(torch.cos(inputs**2), wires=wires, rotation="Z")#inputs
+            for i in range(len(wires) - 1, 0, -1):
+                qml.CNOT(wires=[wires[i - 1], wires[i]])
+            #for i in range(len(wires) - 1, -1, -1):
+            #    for j in range(len(wires) - 1, i, -1):
+            #        qml.CNOT(wires=[wires[i], wires[j]])
+
+            qml.adjoint(qml.templates.AngleEmbedding)(torch.cos(inputs**2), wires=wires, rotation="Y")
+            qml.adjoint(qml.templates.AngleEmbedding)(torch.cos(inputs**2), wires=wires, rotation="Z")
+            for wire in wires:
+                qml.Hadamard(wires=wire)
+            # qml.templates.AngleEmbedding(inputs, wires=wires)
+            # qml.templates.BasicEntanglerLayers(weights, wires=wires)
             results = [qml.expval(qml.PauliZ(wires=wire)) for wire in wires]
             return results
 
@@ -118,6 +153,6 @@ class QLSTM(nn.Module):
         hidden_seq = hidden_seq.transpose(0, 1).contiguous()
 
         if self.return_sequences:
-            return hidden_seq, (h_t, c_t)
+            return hidden_seq, (h_t, c_t) 
         else:
-            return h_t, (h_t, c_t)
+            return h_t, (h_t, c_t) 

@@ -56,7 +56,7 @@ class BatchVQC:
 # FWP Cell 
 ######################
 class FWPCell(nn.Module):
-    def __init__(self, s_dim, a_dim, n_qubits=4, n_layers=2, backend="default.qubit"):
+    def __init__(self, s_dim, a_dim, n_qubits=4, n_layers=2, backend="lightning.gpu"):
         super().__init__()
         self.n_qubits = n_qubits
         self.q_depth = n_layers
@@ -120,7 +120,7 @@ class FWPCell(nn.Module):
 # Full FWP 
 ######################
 class FWP(nn.Module):
-    def __init__(self, s_dim, a_dim, n_qubits=8, n_layers=2, backend="default.qubit", device="cpu"):
+    def __init__(self, s_dim, a_dim, n_qubits=8, n_layers=2, backend="lightning.gpu", device="cuda:0"):
         super().__init__()
         self.fwp_cell = FWPCell(s_dim, a_dim, n_qubits, n_layers, backend)
 

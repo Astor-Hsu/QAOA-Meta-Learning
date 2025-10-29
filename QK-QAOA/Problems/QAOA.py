@@ -13,7 +13,7 @@ class QAOA:
         self.cost_h, self.mixer_h = qaoa.maxcut(self.graph)
         self.with_meta = with_meta
 
-        self.device = qml.device("default.qubit", wires=len(self.wires))
+        self.device = qml.device("lightning.gpu", wires=len(self.wires))
         self.qnode = qml.QNode(self._circuit, self.device, interface = "torch", diff_method = "backprop")
 
     def _qaoa_layer(self, gamma, alpha):
@@ -36,7 +36,7 @@ class QAOA:
       return qml.expval(self.cost_h)
 
     def get_loss_function(self):
-      return lambda theta: -self.qnode(theta)
+      return lambda theta:  -self.qnode(theta)
 
 class QAOAptimizer:
     """
@@ -46,21 +46,21 @@ class QAOAptimizer:
         self.qaoa_problem = qaoa_problem
         self.cost_function = qaoa_problem.get_loss_function()
 
-    def run_optimization(self, initial_params, optimizer = 'Adam', max_iter = 500, learning_rate = 0.01, conv_tol = 1e-6):
+    def run_optimization(self, initial_params, optimizer = 'ADAM', max_iter = 500, learning_rate = 0.01, conv_tol = 1e-6):
         """
         Args:
-         initial_params [list]
-         optimizer [str]:　ADAM or SGD
-         max_iter [int]: max interation
-         learning_rate [float]: learning rate of VQE
+         initial_params [list]: initial parameters of QAOA
+         optimizer [str]: the type of optimizer, ADAM or SGD
+         max_iter [int]: max iteration
+         learning_rate [float]: learning rate of QAOA
          conv_tol [float]: convergence
 
         Output:
          conv_iter [int]: convergence iteration
          param_history[-1] [float]: final optimizedd params
-         energy_history[-1] [float]: final optimized energy
+         cost_history[-1] [float]: final optimized cost
          param_history [list]
-         energy_history [list]
+         cost_history [list]
 
         """
         params = torch.tensor(initial_params, requires_grad=True, dtype=torch.float32)
@@ -71,7 +71,7 @@ class QAOAptimizer:
         elif optimizer == 'SGD':
             opt = optim.SGD([params], lr = learning_rate)
 
-        energy_history = [self.cost_function(params).item()]
+        cost_history = [self.cost_function(params).item()]
         param_history = [params.detach().clone()]
         conv_iter = max_iter
 
@@ -84,16 +84,16 @@ class QAOAptimizer:
             opt.step()
 
             param_history.append(params.detach().clone())
-            energy_history.append(energy.item())
+            cost_history.append(energy.item())
 
             if (iteration+1)%50 == 0:
-                print(f"Step = {iteration+1}/{max_iter}, Energy = {energy_history[-1]:.8f} Ha")
+                print(f"Step = {iteration+1}/{max_iter}, Cost = {cost_history[-1]:.8f}")
             if iteration > 0:
-                conv = abs(energy_history[-1] - energy_history[-2])
+                conv = abs(cost_history[-1] - cost_history[-2])
                 if conv <= conv_tol:
                     conv_iter = iteration + 1
                     print(f"  Convergence reached at step {conv_iter}")
                     break
 
-        print(f"Optimization finished, final energy: {energy_history[-1]:.8f} Ha")
-        return conv_iter, param_history[-1], energy_history[-1], param_history, energy_history
+        print(f"Optimization finished, final energy: {cost_history[-1]:.8f} Ha")
+        return conv_iter, param_history[-1], cost_history[-1], param_history, cost_history
