@@ -37,6 +37,7 @@ random.seed(42)
 Define data loading and hyperparameter
 """
 parser = argparse.ArgumentParser(description='QAOA with sequence models training')
+# --- Training/Data Arguments ---
 parser.add_argument('--dataset_save_path', type=str, default='datasets.pkl', help='Path to load the dataset')
 parser.add_argument('--model_type', type=str, required=True, help='Model type to train (e.g., LSTM, QK, QLSTM, FWP)')
 parser.add_argument('--mapping_type', type=str, default='Linear', help='Mapping type (e.g., Linear, ID)')
@@ -54,46 +55,27 @@ parser.add_argument('--model_save_path', type=str, default='models_default', hel
 parser.add_argument('--time_out', type=int, default=2*60*60, help='Timeout in seconds for training')
 parser.add_argument('--continue_train', type = bool,default = False, help='whether continue training from existing model')
 parser.add_argument('--load_path', type=str, default=None, help='Path to load a pre-trained model')
+# --- QAOA Optimization Arguments ---
 parser.add_argument('--qaoa_optimizer', type=str, default='ADAM', help='Optimizer for QAOA optimization e.g. ADAM or SGD')
 parser.add_argument('--lr_qaoa', type=float, default=0.01, help='Learning rate for QAOA optimization')
 parser.add_argument('--max_iter_qaoa', type=int, default=300, help='Max iterations for QAOA optimization')
 parser.add_argument('--conv_tol_qaoa', type=float, default=1e-6, help='Convergence tolerance for QAOA optimization')
+# --- Testing Arguments ---
 parser.add_argument('--steps_recurrent_loop_test', type=int, default=10, help='Number of recurrent steps during testing (Phase I)')
 parser.add_argument('--Results_save_path', type=str, default='results_default', help='Path to save the test results')
 args = parser.parse_args()
 
-
-"""
-Data loading 
-"""
-with open(args.dataset_save_path, 'rb') as f:
-    loaded_datasets = pickle.load(f)
-    train_set = loaded_datasets['train_set']
-    val_set = loaded_datasets['val_set']
-    test_set = loaded_datasets['test_set']
+def parse_arguments():
+    return parser.parse_args()
 
 """
 Define model and training
 """
 # --- Model Training ---
-def build_and_train_model(model_type,
-                          mapping_type,
-                          layers, 
-                          input_feature_dim,
-                          max_total_params,
-                          loss_function_type,
-                          qaoa_layers,
-                          lr_sequence,
-                          lr_mapping,
-                          epochs, 
-                          steps_recurrent_loop_train,
-                          conv_tol_sequence,
-                          Model_save_path,
+def build_and_train_model(args,
                           train_set,
                           val_set,
-                          time_out,
-                          continue_train,
-                          load_path):
+                          ):
     """
     Define model and then training
          Args:
@@ -120,6 +102,23 @@ def build_and_train_model(model_type,
           model: the trained model
           trainer: the trainer object
     """
+    model_type = args.model_type
+    mapping_type = args.mapping_type
+    layers = args.layers
+    input_feature_dim = args.input_feature_dim
+    max_total_params = args.max_total_params
+    loss_function_type = args.loss_function_type
+    qaoa_layers = args.qaoa_layers
+    lr_sequence = args.lr_sequence
+    lr_mapping = args.lr_mapping
+    epochs = args.epochs
+    steps_recurrent_loop_train = args.steps_recurrent_loop_train
+    conv_tol_sequence = args.conv_tol_sequence
+    Model_save_path = args.model_save_path
+    time_out = args.time_out
+    continue_train = args.continue_train
+    load_path = args.load_path
+
     if model_type in ["LSTM", "QK", "QLSTM"]:
         model = L2L.L2L(model_type = model_type,
                         mapping_type= mapping_type,
@@ -174,69 +173,70 @@ def build_and_train_model(model_type,
     
     return model, trainer
 
-model, trainer = build_and_train_model(
-    model_type = args.model_type,
-    mapping_type = args.mapping_type,
-    layers = args.layers,
-    input_feature_dim = args.input_feature_dim,
-    max_total_params = args.max_total_params,
-    loss_function_type = args.loss_function_type,
-    qaoa_layers = args.qaoa_layers,
-    lr_sequence = args.lr_sequence,
-    lr_mapping = args.lr_mapping,
-    epochs = args.epochs,
-    steps_recurrent_loop_train = args.steps_recurrent_loop_train,
-    conv_tol_sequence = args.conv_tol_sequence,
-    Model_save_path = args.model_save_path,
-    train_set = train_set,
-    val_set = val_set,
-    time_out = args.time_out,
-    continue_train = args.continue_train,
-    load_path = args.load_path
-)
-
-if args.model_type in ["LSTM", "QK", "QLSTM"]:
-    model = L2L.L2L(model_type = args.model_type,
-                    mapping_type= args.mapping_type,
-                    layers = args.layers,
-                    input_feature_dim = args.input_feature_dim,
-                    max_total_params = args.max_total_params,
-                    loss_function_type = args.loss_function_type,
-                        )
+def main():
+    args = parse_arguments()
     
-elif args.model_type == "FWP":
+    # Data loading 
+    with open(args.dataset_save_path, 'rb') as f:
+        loaded_datasets = pickle.load(f)
+        train_set = loaded_datasets['train_set']
+        val_set = loaded_datasets['val_set']
+        test_set = loaded_datasets['test_set']
+    print(f"Datasets loaded from {args.dataset_save_path}")
+    print(f"Train = {len(train_set)} samples, Val = {len(val_set)} samples, Test = {len(test_set)} samples")
+
+    print("\n--- Building and Training Model ---")
+    
+    model, trainer = build_and_train_model(
+        args = args,
+        train_set = train_set,
+        val_set = val_set,
+        time_out = args.time_out
+        )
+    
+    if args.model_type in ["LSTM", "QK", "QLSTM"]:
+        model = L2L.L2L(model_type = args.model_type,
+                       mapping_type= args.mapping_type,
+                       layers = args.layers,
+                       input_feature_dim = args.input_feature_dim,
+                       max_total_params = args.max_total_params,
+                       loss_function_type = args.loss_function_type,
+                       )
+    
+    elif args.model_type == "FWP":
         model = L2L_FWP.L2L_FWP(mapping_type= args.mapping_type,
                                 layers = args.layers,
                                 input_feature_dim = args.input_feature_dim,
                                 max_total_params = args.max_total_params,
                                 loss_function_type = args.loss_function_type,
-                                 )
-state_dict = torch.load(f"best_{args.model_type}_model_{args.model_save_path}.pth")
-model.load_state_dict(state_dict)
-trainer = Optim.ModelTrain(model = model,
+                                )
+        
+    state_dict = torch.load(f"best_{args.model_type}_model_{args.model_save_path}.pth")
+    model.load_state_dict(state_dict)
+    print(f"\n Successfully loaded best model")
+    trainer = Optim.ModelTrain(model = model,
                             qaoa_layers = args.qaoa_layers,
                             lr_sequence = args.lr_sequence,
                             lr_mapping = args.lr_mapping,
                             num_rnn_iteration = args.steps_recurrent_loop_train,
                             )
-
-
-"""
-Model Testing
-"""
-print(f"\n--- Evaluating Model ---")
-for i in range(len(test_set)):
-    graph_test_result = {}
+    
+    print(f"\n--- Evaluating Model ---")
+    
+    for i in range(len(test_set)):
+        graph_test_result = {}
+        test_graph = test_set
     
     sequence_predicted_params_list, sequence_predicted_energies_list = trainer.evaluate(
-        graph_data = test_set[i],
+        graph_data = test_graph,
         num_rnn_iteration = args.steps_recurrent_loop_test)
-
-    print(f"{model.model_type} predicted energies:{sequence_predicted_params_list}")
-    print(f"{model.model_type} predicted params:{sequence_predicted_energies_list[-1]}")
+    
+    print(f"\n--- Test Graph {i+1}/{len(test_set)} (Nodes: {len(test_graph.nodes)}, Edges: {len(test_graph.edges)}) ---")
+    print(f"{args.model_type} predicted energies:{sequence_predicted_params_list}")
+    print(f"{args.model_type} predicted params:{sequence_predicted_energies_list[-1]}")
        
         # use LSTM/QK -FC output as initial params for QAOA to optimize
-    print(f"\n--- QAOA optimization after model ---")
+    print(f"\n--- QAOA optimization after model (Phase II) ---")
     sequence_qaoa = QAOA.QAOA(graph = test_set[i], 
                               n_layers = args.qaoa_layers, 
                               with_meta =  True)
@@ -258,3 +258,6 @@ for i in range(len(test_set)):
     df_result = pd.DataFrame(graph_test_result)
     df_result.to_csv(f"{args.Results_save_path}_node_{len(test_set[i].nodes)}_{i}_edge_{len(test_set[i].edges)}_{i}.csv", index = False)
     print("\n--- Saving Complete ---")
+
+if __name__=="__main__":
+  main()
