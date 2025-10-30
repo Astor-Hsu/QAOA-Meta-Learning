@@ -54,10 +54,12 @@ parser.add_argument('--model_save_path', type=str, default='models_default', hel
 parser.add_argument('--time_out', type=int, default=2*60*60, help='Timeout in seconds for training')
 parser.add_argument('--continue_train', type = bool,default = False, help='whether continue training from existing model')
 parser.add_argument('--load_path', type=str, default=None, help='Path to load a pre-trained model')
-parser.add_argument('--qaoa_optimizer', type=str, default='Adam', help='Optimizer for QAOA optimization e.g. ADAM or SGD')
+parser.add_argument('--qaoa_optimizer', type=str, default='ADAM', help='Optimizer for QAOA optimization e.g. ADAM or SGD')
 parser.add_argument('--lr_qaoa', type=float, default=0.01, help='Learning rate for QAOA optimization')
 parser.add_argument('--max_iter_qaoa', type=int, default=300, help='Max iterations for QAOA optimization')
 parser.add_argument('--conv_tol_qaoa', type=float, default=1e-6, help='Convergence tolerance for QAOA optimization')
+parser.add_argument('--steps_recurrent_loop_test', type=int, default=10, help='Number of recurrent steps during testing (Phase I)')
+parser.add_argument('--Results_save_path', type=str, default='results_default', help='Path to save the test results')
 args = parser.parse_args()
 
 
@@ -172,7 +174,7 @@ def build_and_train_model(model_type,
     
     return model, trainer
 
-build_and_train_model(
+model, trainer = build_and_train_model(
     model_type = args.model_type,
     mapping_type = args.mapping_type,
     layers = args.layers,
@@ -192,4 +194,67 @@ build_and_train_model(
     continue_train = args.continue_train,
     load_path = args.load_path
 )
+
+if args.model_type in ["LSTM", "QK", "QLSTM"]:
+    model = L2L.L2L(model_type = args.model_type,
+                    mapping_type= args.mapping_type,
+                    layers = args.layers,
+                    input_feature_dim = args.input_feature_dim,
+                    max_total_params = args.max_total_params,
+                    loss_function_type = args.loss_function_type,
+                        )
+    
+elif args.model_type == "FWP":
+        model = L2L_FWP.L2L_FWP(mapping_type= args.mapping_type,
+                                layers = args.layers,
+                                input_feature_dim = args.input_feature_dim,
+                                max_total_params = args.max_total_params,
+                                loss_function_type = args.loss_function_type,
+                                 )
+state_dict = torch.load(f"best_{args.model_type}_model_{args.model_save_path}.pth")
+model.load_state_dict(state_dict)
+trainer = Optim.ModelTrain(model = model,
+                            qaoa_layers = args.qaoa_layers,
+                            lr_sequence = args.lr_sequence,
+                            lr_mapping = args.lr_mapping,
+                            num_rnn_iteration = args.steps_recurrent_loop_train,
+                            )
+
+
+"""
+Model Testing
+"""
+print(f"\n--- Evaluating Model ---")
+for i in range(len(test_set)):
+    graph_test_result = {}
+    
+    sequence_predicted_params_list, sequence_predicted_energies_list = trainer.evaluate(
+        graph_data = test_set[i],
+        num_rnn_iteration = args.steps_recurrent_loop_test)
+
+    print(f"{model.model_type} predicted energies:{sequence_predicted_params_list}")
+    print(f"{model.model_type} predicted params:{sequence_predicted_energies_list[-1]}")
+       
+        # use LSTM/QK -FC output as initial params for QAOA to optimize
+    print(f"\n--- QAOA optimization after model ---")
+    sequence_qaoa = QAOA.QAOA(graph = test_set[i], 
+                              n_layers = args.qaoa_layers, 
+                              with_meta =  True)
+        
+    opt_sequence_qaoa = QAOA.QAOAptimizer(sequence_qaoa)
+    conv_iter_sequence, final_params_sequence, final_energy_sequence, params_history_sequence, cost_history_sequence = opt_sequence_qaoa.run_optimization(
+            initial_params = sequence_predicted_params_list[-1],
+            optimizer = args.qaoa_optimizer,
+            max_iter = args.max_iter_qaoa,
+            learning_rate = args.lr_qaoa,
+            conv_tol = args.conv_tol_qaoa
+            )
+    
+    graph_test_result = {
+            'Phase I': pd.Series(sequence_predicted_energies_list),
+            'Phase II':pd.Series(cost_history_sequence),
+            }
                           
+    df_result = pd.DataFrame(graph_test_result)
+    df_result.to_csv(f"{args.Results_save_path}_node_{len(test_set[i].nodes)}_{i}_edge_{len(test_set[i].edges)}_{i}.csv", index = False)
+    print("\n--- Saving Complete ---")
