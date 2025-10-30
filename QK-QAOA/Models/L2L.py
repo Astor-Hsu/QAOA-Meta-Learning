@@ -25,7 +25,7 @@ class L2L(nn.Module):
           loss_function_type (str): the loss function type, weighted or observed improvement (define by Verdon's papaer)
 
          Outputs:
-          self.l2l [model]: LSTM, QK-LSTM, QLSTM
+          self.sequence [model]: LSTM, QK-LSTM, QLSTM
           self.mapping [model]: linear model, ID 
         """
         self.model_type = model_type
@@ -39,17 +39,17 @@ class L2L(nn.Module):
          input_feature_dim + 1 (cost) ->  sequence model -> input_feature_dim -> linear model -> max_total_params
         """
         if self.model_type == "LSTM":
-            self.lstm = nn.LSTM(input_size = self.input_feature_dim + 1,
+            self.sequence = nn.LSTM(input_size = self.input_feature_dim + 1,
                                 hidden_size = self.input_feature_dim,
                                 num_layers = self.layers,
                                 batch_first = True).to(device)
         elif self.model_type == "QK":
-            self.lstm = QKLSTM.QKLSTM(input_size = self.input_feature_dim+1,
+            self.sequence = QKLSTM.QKLSTM(input_size = self.input_feature_dim+1,
                                hidden_size = self.input_feature_dim+1, 
                                n_qubits = 4,
                                n_qlayers = self.layers)
         elif self.model_type == "QLSTM":
-            self.lstm = QLSTM.QLSTM(input_size = self.input_feature_dim+1 ,
+            self.sequence = QLSTM.QLSTM(input_size = self.input_feature_dim+1 ,
                                hidden_size = self.input_feature_dim+1,
                                n_qubits = 4,
                                n_qlayers = self.layers)
@@ -72,26 +72,19 @@ class L2L(nn.Module):
         else:
             hidden_state_size = self.input_feature_dim
 
-        current_h = torch.zeros((self.lstm.num_layers, 1, hidden_state_size), dtype = torch.float32).to(device)
-        current_c = torch.zeros((self.lstm.num_layers, 1, hidden_state_size), dtype = torch.float32).to(device)
+        current_h = torch.zeros((self.sequence.num_layers, 1, hidden_state_size), dtype = torch.float32).to(device)
+        current_c = torch.zeros((self.sequence.num_layers, 1, hidden_state_size), dtype = torch.float32).to(device)
 
         param_outputs = []
         cost_outputs = []
 
         for i in range(num_rnn_iteration):
             new_input = torch.cat([current_cost, current_params], dim = 1).unsqueeze(1)
-            new_params, (new_h, new_c) = self.lstm(new_input, (current_h, current_c))
+            new_params, (new_h, new_c) = self.sequence(new_input, (current_h, current_c))
            
             new_params = new_params.squeeze(1) 
             
-            if self.mapping_type == "DS":
-                single_input = new_params[:, :self.input_feature_dim//2]
-                double_input = new_params[:, self.input_feature_dim//2:]
-                single_params = self.single_mapping(single_input)
-                double_params = self.double_mapping(double_input)
-                params = torch.cat([single_params, double_params], dim = 1).to(device)
-            else:
-                params = self.mapping(new_params.squeeze(1)).to(device)
+            params = self.mapping(new_params.squeeze(1)).to(device)
             
             _cost = graph_cost(params.squeeze(0).to(device))
             new_cost = torch.as_tensor(_cost, dtype=torch.float32, device=device).view(1,1)

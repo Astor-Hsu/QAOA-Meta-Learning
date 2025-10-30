@@ -15,12 +15,12 @@ class ModelTrain:
     """
     Train and evaluate model
     """
-    def __init__(self, model, qaoa_layers, lr_lstm = 0.01, lr_mapping = 0.01, num_rnn_iteration = 5):
+    def __init__(self, model, qaoa_layers, lr_sequence = 0.01, lr_mapping = 0.01, num_rnn_iteration = 5):
         """
         Args:
          model [model]: the model defined by L2L or L2L_FWP
          qaoa_layers [int]: number of QAOA layers (P)
-         lr_lstm [float]: learning rate of LSTM or QK
+         lr_sequence [float]: learning rate of sequence model
          lr_mapping [float]: learning rate of linear model
          num_rnn_iteration [int]: number of sequence model Phase I recurrent step (T)
          optimizer: RMSprop
@@ -28,29 +28,23 @@ class ModelTrain:
         self.model = model
         self.model.to(device)
         self.qaoa_layers = qaoa_layers
-        self.lr_lstm = lr_lstm
+        self.lr_sequence = lr_sequence
         self.lr_mapping = lr_mapping
         self.num_rnn_iteration = num_rnn_iteration
         
         if self.model.model_type == "FWP":
             learning_rate = [
-                {'params': self.model.fwp.parameters(), 'lr': self.lr_lstm},
+                {'params': self.model.fwp.parameters(), 'lr': self.lr_sequence},
                 {'params': self.model.mapping.parameters(), 'lr': self.lr_mapping}
             ]
 
-        elif self.model.mapping_type == "DS":
-            learning_rate = [
-                {'params':self.model.lstm.parameters(), 'lr': self.lr_lstm},
-                {'params':self.model.single_mapping.parameters(), 'lr': self.lr_mapping},
-                {'params':self.model.double_mapping.parameters(), 'lr': self.lr_mapping}
-                    ]
         elif self.model.mapping_type == "ID":
             learning_rate = [
-                {'params':self.model.lstm.parameters(), 'lr': self.lr_lstm},
+                {'params':self.mode.sequence.parameters(), 'lr': self.lr_sequence},
                  ]
         else:
             learning_rate = [
-                 {'params':self.model.lstm.parameters(), 'lr': self.lr_lstm},
+                 {'params':self.model.sequence.parameters(), 'lr': self.lr_sequence},
                  {'params':self.model.mapping.parameters(), 'lr': self.lr_mapping}
                  ]
         
@@ -68,13 +62,13 @@ class ModelTrain:
 
         return loss
 
-    def train(self, train_data, val_data, epochs = 5, conv_tol_lstm = 1e-5, time_out = 3600, save_path = None):
+    def train(self, train_data, val_data, epochs = 5, conv_tol_sequence = 1e-5, time_out = 3600, save_path = None):
         """
         Args:
          train_data [list]: train set
          val_data [list]: validation set
          epochs [int]: number of epochs
-         conv_tol_lstm [float]: the convergence tolerance of sequence model
+         conv_tol_sequence [float]: the convergence tolerance of sequence model
          time_out [int]: time out for training (in seconds)
          save_path [str]: path to save the best model
         """
@@ -87,12 +81,12 @@ class ModelTrain:
         start_time = time.time()
 
         train_cost = [QAOA.QAOA(graph = g,
-                                    n_layers = self.qaoa_layers,
-                                    with_meta=  True).get_loss_function() for g in train_data]
+                                n_layers = self.qaoa_layers,
+                                with_meta=  True).get_loss_function() for g in train_data]
         
         val_cost = [QAOA.QAOA(graph = g,
-                                    n_layers = self.qaoa_layers,
-                                    with_meta=  True).get_loss_function() for g in val_data]
+                              n_layers = self.qaoa_layers,
+                              with_meta=  True).get_loss_function() for g in val_data]
 
         print(f"\n--- Starting {self.model.model_type} Model Training ---")
         for epoch in range(epochs):
@@ -137,8 +131,8 @@ class ModelTrain:
 
             if epoch % 1 == 0:
                 print(f"Epoch {epoch+1} Mean loss: {mean_loss:.8f}, Mean val loss:{mean_val_loss:.8f}")
-                lr_lstm = self.optimizer.param_groups[0]['lr']
-                print(f"Current {self.model.model_type} learning rate: {lr_lstm:.10f}")
+                lr_sequence = self.optimizer.param_groups[0]['lr']
+                print(f"Current {self.model.model_type} learning rate: {lr_sequence:.10f}")
                 if self.model.mapping_type != "ID":
                     lr_mapping =  self.optimizer.param_groups[1]['lr']
                     print(f"Current mapping learning rate: {lr_mapping:.10f}")
@@ -146,7 +140,7 @@ class ModelTrain:
             if previous_mean_loss is not None:
                 #change = abs(previous_mean_loss - mean_loss)/abs(previous_mean_loss)
                 change = abs(previous_mean_loss - mean_loss)
-                if change <= conv_tol_lstm:
+                if change <= conv_tol_sequence:
                     print(f"Traning converged at epoch {epoch+1}")
                     print(f"mean loss:{mean_loss_history}")
                     print(f"mean val loss:{val_loss_history}")

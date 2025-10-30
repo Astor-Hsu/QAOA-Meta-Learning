@@ -75,16 +75,16 @@ class QAOAptimizer:
         param_history = [params.detach().clone()]
         conv_iter = max_iter
 
-        print("\n--- Starting VQE Optimization ---")
+        print("\n--- Starting QAOA Optimization ---")
 
         for iteration in range(max_iter):
             opt.zero_grad()
-            energy = self.cost_function(params)
-            energy.backward()
+            cost = self.cost_function(params)
+            cost.backward()
             opt.step()
 
             param_history.append(params.detach().clone())
-            cost_history.append(energy.item())
+            cost_history.append(cost.item())
 
             if (iteration+1)%50 == 0:
                 print(f"Step = {iteration+1}/{max_iter}, Cost = {cost_history[-1]:.8f}")
@@ -95,5 +95,5 @@ class QAOAptimizer:
                     print(f"  Convergence reached at step {conv_iter}")
                     break
 
-        print(f"Optimization finished, final energy: {cost_history[-1]:.8f} Ha")
+        print(f"Optimization finished, final cost: {cost_history[-1]:.8f}")
         return conv_iter, param_history[-1], cost_history[-1], param_history, cost_history
