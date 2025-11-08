@@ -282,11 +282,11 @@ def run_experiment(args):
         plt.rc('font', **font)
         plt.plot(np.arange(0, args.steps_recurrent_loop_test), sequence_predicted_energies_list, label=f'{args.model_type}-QAOA', ls="dashed", color = "darkgreen", markersize = 9)
         plt.plot(np.arange(args.steps_recurrent_loop_test, args.steps_recurrent_loop_test + len(cost_history_sequence)), cost_history_sequence, label=f'QAOA after {args.model_type}', color = "darkgreen", markersize = 9)
-        plt.plot(np.arange(0, args.max_iter_qaoa), cost_history_rand, label='QAOA, Random', color = "darkred", markersize = 9)
+        plt.plot(np.arange(0, args.max_iter_qaoa+1), cost_history_rand, label='QAOA, Random', color = "darkred", markersize = 9)
         plt.xlabel("Iteration")
         plt.ylabel("Loss")
         plt.title(f"num_node ={len(test_graph.nodes)}, num_edge = {len(test_graph.edges)}")
-        plt.set_xlim([0-5, args.max_iter_qaoa + 5])
+        plt.xlim([0-5, args.max_iter_qaoa + args.steps_recurrent_loop_test])
         plt.legend()
         plt.show()
 
@@ -297,7 +297,8 @@ def run_experiment(args):
             }
                           
         df_result = pd.DataFrame(graph_test_result)
-        df_result.to_csv(f"{args.Results_save_path}_node_{len(test_graph.nodes)}_{i}_edge_{len(test_graph.edges)}_{i}.csv", index = False)
+        df_result.to_csv(f"{args.Results_save_path}_node_{len(test_graph.nodes)}_edge_{len(test_graph.edges)}_{i}.csv", index = False)
+        plt.savefig(f'Result_{args.Results_save_path}_node_{len(test_graph.nodes)}_edges_{len(test_graph.edges)}_{i}.svg', format='svg', bbox_inches='tight')
         print("\n--- Saving Complete ---")
 
 def main():
