@@ -235,7 +235,7 @@ def run_experiment(args):
             num_rnn_iteration = args.steps_recurrent_loop_test)
     
         print(f"\n--- Test Graph {i+1}/{len(test_set)} (Nodes: {len(test_graph.nodes)}, Edges: {len(test_graph.edges)}) ---")
-    p   rint(f"{args.model_type} predicted energies:{sequence_predicted_params_list}")
+        print(f"{args.model_type} predicted energies:{sequence_predicted_params_list}")
         print(f"{args.model_type} predicted params:{sequence_predicted_energies_list[-1]}")
        
         # use sequence model output as initial params for QAOA to optimize
