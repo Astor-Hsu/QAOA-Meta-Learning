@@ -11,6 +11,7 @@ import QAOA
 import numpy as np
 import pandas as pd
 import pickle
+import networkx as nx
 ## random
 import random
 import math
@@ -172,6 +173,7 @@ def build_and_train_model(args,
     
     return model, trainer
 
+# Model Testing
 def run_experiment(args):
 
     # Data loading 
@@ -182,6 +184,8 @@ def run_experiment(args):
         test_set = loaded_datasets['test_data']
     print(f"Datasets loaded from {args.dataset_save_path}")
     print(f"Train = {len(train_set)} samples, Val = {len(val_set)} samples, Test = {len(test_set)} samples")
+    print(f"The first train graph has {len(train_set[0].nodes)} nodes and {len(train_set[0].edges)} edges.")
+    nx.draw(train_set[0])
 
     print("\n--- Building and Training Model ---")
     
@@ -212,34 +216,36 @@ def run_experiment(args):
     model.load_state_dict(state_dict)
     print(f"\n Successfully loaded best model")
     trainer = Optim.ModelTrain(model = model,
-                            qaoa_layers = args.qaoa_layers,
-                            lr_sequence = args.lr_sequence,
-                            lr_mapping = args.lr_mapping,
-                            num_rnn_iteration = args.steps_recurrent_loop_train,
-                            )
+                               qaoa_layers = args.qaoa_layers,
+                               lr_sequence = args.lr_sequence,
+                               lr_mapping = args.lr_mapping,
+                               num_rnn_iteration = args.steps_recurrent_loop_train,
+                               )
     
     print(f"\n--- Evaluating Model ---")
+    print(f"The first test graph has {len(test_set[0].nodes)} nodes and {len(test_set[0].edges)} edges.")
+    nx.draw(test_set[0])
     
     for i in range(len(test_set)):
         graph_test_result = {}
         test_graph = test_set[i]
     
-    sequence_predicted_params_list, sequence_predicted_energies_list = trainer.evaluate(
-        graph_data = test_graph,
-        num_rnn_iteration = args.steps_recurrent_loop_test)
+        sequence_predicted_params_list, sequence_predicted_energies_list = trainer.evaluate(
+            graph_data = test_graph,
+            num_rnn_iteration = args.steps_recurrent_loop_test)
     
-    print(f"\n--- Test Graph {i+1}/{len(test_set)} (Nodes: {len(test_graph.nodes)}, Edges: {len(test_graph.edges)}) ---")
-    print(f"{args.model_type} predicted energies:{sequence_predicted_params_list}")
-    print(f"{args.model_type} predicted params:{sequence_predicted_energies_list[-1]}")
+        print(f"\n--- Test Graph {i+1}/{len(test_set)} (Nodes: {len(test_graph.nodes)}, Edges: {len(test_graph.edges)}) ---")
+    p   rint(f"{args.model_type} predicted energies:{sequence_predicted_params_list}")
+        print(f"{args.model_type} predicted params:{sequence_predicted_energies_list[-1]}")
        
-        # use LSTM/QK -FC output as initial params for QAOA to optimize
-    print(f"\n--- QAOA optimization after model (Phase II) ---")
-    sequence_qaoa = QAOA.QAOA(graph = test_graph, 
-                              n_layers = args.qaoa_layers, 
-                              with_meta =  True)
+        # use sequence model output as initial params for QAOA to optimize
+        print(f"\n--- QAOA optimization after model (Phase II) ---")
+        equence_qaoa = QAOA.QAOA(graph = test_graph, 
+                                 n_layers = args.qaoa_layers, 
+                                 with_meta =  True)
         
-    opt_sequence_qaoa = QAOA.QAOAptimizer(sequence_qaoa)
-    conv_iter_sequence, final_params_sequence, final_energy_sequence, params_history_sequence, cost_history_sequence = opt_sequence_qaoa.run_optimization(
+        opt_sequence_qaoa = QAOA.QAOAptimizer(sequence_qaoa)
+        conv_iter_sequence, final_params_sequence, final_energy_sequence, params_history_sequence, cost_history_sequence = opt_sequence_qaoa.run_optimization(
             initial_params = sequence_predicted_params_list[-1],
             optimizer = args.qaoa_optimizer,
             max_iter = args.max_iter_qaoa,
@@ -247,14 +253,51 @@ def run_experiment(args):
             conv_tol = args.conv_tol_qaoa
             )
     
-    graph_test_result = {
+        sequence_qaoa_params = np.array([p.detach().numpy() if hasattr(p, "detach") else p for p in params_history_sequence])
+        np.savez(f"{self.model.model_type}_QAOA_node_{len(test_graph.nodes)}_edge_{len(test_graph.edges)}.npz", params = sequence_qaoa_params)
+    
+        print(f"\n--- Standard QAOA, Random params ---")
+        params_rand = torch.rand(args.input_feature_dim, dtype = torch.float32)
+        qaoa_test_rand = QAOA.QAOA(graph = test_graph, 
+                                   n_layers = args.qaoa_layers, 
+                                   with_meta =  False)
+        
+        opt_rand_qaoa = QAOA.QAOAptimizer(qaoa_test_rand)
+        conv_iter_rand, final_params_rand, final_energy_rand, params_history_rand, cost_history_rand = opt_rand_qaoa.run_optimization(
+            initial_params = params_rand,
+            optimizer = args.qaoa_optimizer,
+            max_iter = args.max_iter_qaoa,
+            learning_rate = args.lr_qaoa,
+            conv_tol = args.conv_tol_qaoa
+            )
+        
+        qaoa_params_rand = np.array([p.detach().numpy() if hasattr(p, "detach") else p for p in params_history_rand])
+        np.savez(f"QAOA_Random_node_{len(test_graph.nodes)}_edge_{len(test_graph.edges)}_{i}.npz", params = qaoa_params_rand)
+
+        # Draw result
+        print("Result of MaxCut QAOA")
+        plt.figure(figsize = (15,8))
+        font = {'size':16}
+        plt.rc('font', **font)
+        plt.plot(np.arange(0, len(args.steps_recurrent_loop_test)), sequence_predicted_energies_list, label=f'{args.model_type}-QAOA', ls="dashed", color = "darkgreen", markersize = 9)
+        plt.plot(np.arange(args.steps_recurrent_loop_test, args.steps_recurrent_loop_test + len(cost_history_sequence)), cost_history_sequence, label=f'QAOA after {args.model_type}', color = "darkgreen", markersize = 9)
+        plt.plot(np.arange(0, len(args.conv_tol_qaoa)), cost_history_rand, label='QAOA, Random', color = "darkred", markersize = 9)
+        plt.xlabel("Iteration")
+        plt.ylabel("Loss")
+        plt.title(f"num_node ={len(test_graph.nodes)}, num_edge = {len(test_graph.edges)}")
+        plt.set_xlim([0-5, args.conv_tol_qaoa + 5])
+        plt.legend()
+        plt.show()
+
+        graph_test_result = {
             'Phase I': pd.Series(sequence_predicted_energies_list),
             'Phase II':pd.Series(cost_history_sequence),
+            'Random': pd.Series(cost_history_rand),
             }
                           
-    df_result = pd.DataFrame(graph_test_result)
-    df_result.to_csv(f"{args.Results_save_path}_node_{len(test_set[i].nodes)}_{i}_edge_{len(test_set[i].edges)}_{i}.csv", index = False)
-    print("\n--- Saving Complete ---")
+        df_result = pd.DataFrame(graph_test_result)
+        df_result.to_csv(f"{args.Results_save_path}_node_{len(test_graph.nodes)}_{i}_edge_{len(test_graph.edges)}_{i}.csv", index = False)
+        print("\n--- Saving Complete ---")
 
 def main():
     args = parse_arguments()

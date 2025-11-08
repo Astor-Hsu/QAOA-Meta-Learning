@@ -15,7 +15,7 @@ class ModelTrain:
     """
     Train and evaluate model
     """
-    def __init__(self, model, qaoa_layers, lr_sequence = 0.01, lr_mapping = 0.01, num_rnn_iteration = 5):
+    def __init__(self, model, qaoa_layers, lr_sequence = 0.01, lr_mapping = 0.01, num_rnn_iteration = 10):
         """
         Args:
          model [model]: the model defined by L2L or L2L_FWP
@@ -164,7 +164,7 @@ class ModelTrain:
         print(f"mean loss:{mean_loss_history}")
         print(f"mean val loss:{val_loss_history}")
         
-    def evaluate(self, graph_data, num_rnn_iteration = 5):
+    def evaluate(self, graph_data, num_rnn_iteration = 10):
         """
         Args:
          graph_data [list]: molecule data from test set
@@ -185,5 +185,9 @@ class ModelTrain:
         
         l2l_guesses = [p.squeeze(0) for p in params]
         l2l_cost = [loss_qnode(guess).item() for guess in l2l_guesses]
+
+        # save params results
+        params = np.array([p.detach().numpy() if hasattr(p, "detach") else p for p in l2l_guesses])
+        np.savez(f"{self.model.model_type}_node_{len(graph_data.nodes)}_edge_{len(graph_data.edges)}.npz", params = params)
 
         return l2l_guesses, l2l_cost
