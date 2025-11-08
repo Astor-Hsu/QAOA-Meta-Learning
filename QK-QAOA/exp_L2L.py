@@ -280,9 +280,9 @@ def run_experiment(args):
         plt.figure(figsize = (15,8))
         font = {'size':16}
         plt.rc('font', **font)
-        plt.plot(np.arange(0, len(args.steps_recurrent_loop_test)), sequence_predicted_energies_list, label=f'{args.model_type}-QAOA', ls="dashed", color = "darkgreen", markersize = 9)
+        plt.plot(np.arange(0, args.steps_recurrent_loop_test), sequence_predicted_energies_list, label=f'{args.model_type}-QAOA', ls="dashed", color = "darkgreen", markersize = 9)
         plt.plot(np.arange(args.steps_recurrent_loop_test, args.steps_recurrent_loop_test + len(cost_history_sequence)), cost_history_sequence, label=f'QAOA after {args.model_type}', color = "darkgreen", markersize = 9)
-        plt.plot(np.arange(0, len(args.conv_tol_qaoa)), cost_history_rand, label='QAOA, Random', color = "darkred", markersize = 9)
+        plt.plot(np.arange(0, args.conv_tol_qaoa), cost_history_rand, label='QAOA, Random', color = "darkred", markersize = 9)
         plt.xlabel("Iteration")
         plt.ylabel("Loss")
         plt.title(f"num_node ={len(test_graph.nodes)}, num_edge = {len(test_graph.edges)}")
