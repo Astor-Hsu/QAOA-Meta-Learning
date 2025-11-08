@@ -240,7 +240,7 @@ def run_experiment(args):
        
         # use sequence model output as initial params for QAOA to optimize
         print(f"\n--- QAOA optimization after model (Phase II) ---")
-        equence_qaoa = QAOA.QAOA(graph = test_graph, 
+        sequence_qaoa = QAOA.QAOA(graph = test_graph, 
                                  n_layers = args.qaoa_layers, 
                                  with_meta =  True)
         
