@@ -13,7 +13,7 @@ class QAOA:
         self.cost_h, self.mixer_h = qaoa.maxcut(self.graph)
         self.with_meta = with_meta
 
-        self.device = qml.device("lightning.gpu", wires=len(self.wires))
+        self.device = qml.device("default.qubit", wires=len(self.wires))
         self.qnode = qml.QNode(self._circuit, self.device, interface = "torch", diff_method = "backprop")
 
     def _qaoa_layer(self, gamma, alpha):
@@ -36,7 +36,7 @@ class QAOA:
       return qml.expval(self.cost_h)
 
     def get_loss_function(self):
-      return lambda theta:  -self.qnode(theta)
+      return lambda theta: self.qnode(theta)
 
 class QAOAptimizer:
     """

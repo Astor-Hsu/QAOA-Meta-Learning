@@ -16,7 +16,7 @@ class QKLSTM(nn.Module):
         batch_first=True,
         return_sequences=False,
         return_state=False,
-        backend="lightning.gpu",
+        backend="lightning.qubit",
         device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
     ):
         super(QKLSTM, self).__init__()

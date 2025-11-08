@@ -120,7 +120,7 @@ class FWPCell(nn.Module):
 # Full FWP 
 ######################
 class FWP(nn.Module):
-    def __init__(self, s_dim, a_dim, n_qubits=8, n_layers=2, backend="lightning.gpu", device="cuda:0"):
+    def __init__(self, s_dim, a_dim, n_qubits=8, n_layers=2, backend="lightning.cpu", device="cuda:0"):
         super().__init__()
         self.fwp_cell = FWPCell(s_dim, a_dim, n_qubits, n_layers, backend)
 

@@ -85,11 +85,11 @@ def build_and_train_model(args,
           max_total_params [int]: the max numbers for QAOA we need for this experiment
           loss_function_type (str): the loss function type, weighted or observed improvement (define by Verdon's papaer)
           qaoa_layers [int]: the number of QAOA layers for ansatz
-          lr_sequence [float]: learning rate for LSTM, QKLSTM, QLSTM or FWP
+          lr_lstm [float]: learning rate for LSTM, QKLSTM, QLSTM or FWP
           lr_mapping [float]: learning rate for mapping model
           epochs [int]: the number of training epochs
           steps_recurrent_loop_train [int]: the number of recurrent step for training
-          conv_tol_sequence [float]: the convergence tolerance for training
+          conv_tol_lstm [float]: the convergence tolerance for training
           Model_save_path (str): the path to save model's parameters
           train_set: the training dataset
           val_set: the validation dataset
@@ -222,24 +222,24 @@ def run_experiment(args):
     
     for i in range(len(test_set)):
         graph_test_result = {}
-        graph = test_set[i]
-        
-        sequence_predicted_params_list, sequence_predicted_cost_list = trainer.evaluate(
-            graph_data =graph,
-            num_rnn_iteration = args.steps_recurrent_loop_test)
+        test_graph = test_set[i]
     
-        print(f"\n--- Test Graph {i+1}/{len(test_set)} (Nodes: {len(graph.nodes)}, Edges: {len(graph.edges)}) ---")
-        print(f"{args.model_type} predicted params:{sequence_predicted_params_list[-1]}")
-        print(f"{args.model_type} predicted cost:{sequence_predicted_cost_list}")
+    sequence_predicted_params_list, sequence_predicted_energies_list = trainer.evaluate(
+        graph_data = test_graph,
+        num_rnn_iteration = args.steps_recurrent_loop_test)
+    
+    print(f"\n--- Test Graph {i+1}/{len(test_set)} (Nodes: {len(test_graph.nodes)}, Edges: {len(test_graph.edges)}) ---")
+    print(f"{args.model_type} predicted energies:{sequence_predicted_params_list}")
+    print(f"{args.model_type} predicted params:{sequence_predicted_energies_list[-1]}")
        
         # use LSTM/QK -FC output as initial params for QAOA to optimize
-        print(f"\n--- QAOA optimization after model (Phase II) ---")
-        sequence_qaoa = QAOA.QAOA(graph = graph, 
-                                  n_layers = args.qaoa_layers, 
-                                  with_meta =  True)
+    print(f"\n--- QAOA optimization after model (Phase II) ---")
+    sequence_qaoa = QAOA.QAOA(graph = test_graph, 
+                              n_layers = args.qaoa_layers, 
+                              with_meta =  True)
         
-        opt_sequence_qaoa = QAOA.QAOAptimizer(sequence_qaoa)
-        conv_iter_sequence, final_params_sequence, final_energy_sequence, params_history_sequence, cost_history_sequence = opt_sequence_qaoa.run_optimization(
+    opt_sequence_qaoa = QAOA.QAOAptimizer(sequence_qaoa)
+    conv_iter_sequence, final_params_sequence, final_energy_sequence, params_history_sequence, cost_history_sequence = opt_sequence_qaoa.run_optimization(
             initial_params = sequence_predicted_params_list[-1],
             optimizer = args.qaoa_optimizer,
             max_iter = args.max_iter_qaoa,
@@ -247,13 +247,13 @@ def run_experiment(args):
             conv_tol = args.conv_tol_qaoa
             )
     
-        graph_test_result = {
-            'Phase I': pd.Series(sequence_predicted_cost_list),
+    graph_test_result = {
+            'Phase I': pd.Series(sequence_predicted_energies_list),
             'Phase II':pd.Series(cost_history_sequence),
             }
                           
-        df_result = pd.DataFrame(graph_test_result)
-        df_result.to_csv(f"{args.Results_save_path}_node_{len(test_set[i].nodes)}_{i}_edge_{len(test_set[i].edges)}_{i}.csv", index = False)
+    df_result = pd.DataFrame(graph_test_result)
+    df_result.to_csv(f"{args.Results_save_path}_node_{len(test_set[i].nodes)}_{i}_edge_{len(test_set[i].edges)}_{i}.csv", index = False)
     print("\n--- Saving Complete ---")
 
 def main():

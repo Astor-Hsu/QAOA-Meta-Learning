@@ -29,7 +29,7 @@ class L2L_FWP(nn.Module):
         self.fwp = FWP.FWP(
             s_dim=self.input_feature_dim + 1,  
             a_dim=self.input_feature_dim,   
-            n_qubits=2,
+            n_qubits=4,
             n_layers=self.layers,
             backend="default.qubit",
             device=device
