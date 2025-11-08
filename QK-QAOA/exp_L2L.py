@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import pickle
 import networkx as nx
+import matplotlib.pyplot as plt
 ## random
 import random
 import math
@@ -254,7 +255,7 @@ def run_experiment(args):
             )
     
         sequence_qaoa_params = np.array([p.detach().numpy() if hasattr(p, "detach") else p for p in params_history_sequence])
-        np.savez(f"{self.model.model_type}_QAOA_node_{len(test_graph.nodes)}_edge_{len(test_graph.edges)}.npz", params = sequence_qaoa_params)
+        np.savez(f"{args.model_type}_QAOA_node_{len(test_graph.nodes)}_edge_{len(test_graph.edges)}.npz", params = sequence_qaoa_params)
     
         print(f"\n--- Standard QAOA, Random params ---")
         params_rand = torch.rand(args.input_feature_dim, dtype = torch.float32)
