@@ -2,7 +2,7 @@
 
 <br>
 <p align="center">
-  <img src="img/overview.png" alt="Overview" width="100%" height="auto">
+  <img src="img/Overview.png" alt="Overview" width="100%" height="auto">
 </p>
 
 ## Introduction
