@@ -109,7 +109,7 @@ class ModelTrain:
                 epoch_loss.append(loss.item())
 
                 if (i+1) % 200 == 0:
-                    print(f" > Molecule {i+1}/{len(train_data)} - Loss: {loss.item():.8f}")
+                    print(f" > Graph {i+1}/{len(train_data)} - Loss: {loss.item():.8f}")
                 
             mean_loss = np.mean(epoch_loss)
             mean_loss_history.append(mean_loss)
@@ -167,7 +167,7 @@ class ModelTrain:
     def evaluate(self, graph_data, num_rnn_iteration = 10):
         """
         Args:
-         graph_data [list]: molecule data from test set
+         graph_data [list]: graph data from test set
          num_rnn_iteration [float]: number of sequence model Phase I recurrent step (T)
         Outputs:
          l2l_guesses [list]: params predicted by model

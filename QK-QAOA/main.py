@@ -44,13 +44,13 @@ parser.add_argument('--dataset_save_path', type=str, default='datasets.pkl', hel
 parser.add_argument('--model_type', type=str, required=True, help='Model type to train (e.g., LSTM, QK, QLSTM, FWP)')
 parser.add_argument('--mapping_type', type=str, default='Linear', help='Mapping type (e.g., Linear, ID)')
 parser.add_argument('--layers', type=int, default=1, help='Number of sequence model layers')
-parser.add_argument('--input_feature_dim', type=int, default=4, help='Input feature dimension for the model')
-parser.add_argument('--max_total_params', type=int, default=4, help='Max total parameters for QAOA ansatz')
+parser.add_argument('--input_feature_dim', type=int, default=2, help='Input feature dimension for the model')
+parser.add_argument('--max_total_params', type=int, default=2, help='Max total parameters for QAOA ansatz')
 parser.add_argument('--loss_function_type', type=str, default='weighted', help='Loss function type (e.g., weighted, observed improvement)')
-parser.add_argument('--qaoa_layers', type=int, default=2, help='Number of layers for QAOA')
-parser.add_argument('--lr_sequence', type=float, default=8e-5, help='Learning rate for sequence model')
+parser.add_argument('--qaoa_layers', type=int, default=1, help='Number of layers for QAOA')
+parser.add_argument('--lr_sequence', type=float, default=6e-6, help='Learning rate for sequence model')
 parser.add_argument('--lr_mapping', type=float, default=1e-4, help='Learning rate for mapping layer')
-parser.add_argument('--epochs', type=int, default=1000, help='Number of training epochs')
+parser.add_argument('--epochs', type=int, default=50, help='Number of training epochs')
 parser.add_argument('--steps_recurrent_loop_train', type=int, default=10, help='Number of recurrent steps during training')
 parser.add_argument('--conv_tol_sequence', type=float, default=1e-5, help='Convergence tolerance for training')
 parser.add_argument('--model_save_path', type=str, default='models_default', help='Path to save the trained model')
@@ -59,7 +59,7 @@ parser.add_argument('--continue_train', type = bool,default = False, help='wheth
 parser.add_argument('--load_path', type=str, default=None, help='Path to load a pre-trained model')
 # --- QAOA Optimization Arguments ---
 parser.add_argument('--qaoa_optimizer', type=str, default='ADAM', help='Optimizer for QAOA optimization e.g. ADAM or SGD')
-parser.add_argument('--lr_qaoa', type=float, default=0.01, help='Learning rate for QAOA optimization')
+parser.add_argument('--lr_qaoa', type=float, default=1e-3, help='Learning rate for QAOA optimization')
 parser.add_argument('--max_iter_qaoa', type=int, default=300, help='Max iterations for QAOA optimization')
 parser.add_argument('--conv_tol_qaoa', type=float, default=1e-6, help='Convergence tolerance for QAOA optimization')
 # --- Testing Arguments ---
@@ -205,7 +205,7 @@ def run_experiment(args):
                        loss_function_type = args.loss_function_type,
                        )
     
-    elif args.model_type == "FWP":
+    elif args.model_type == "QFWP":
         model = L2L_FWP.L2L_FWP(mapping_type= args.mapping_type,
                                 layers = args.layers,
                                 input_feature_dim = args.input_feature_dim,
@@ -215,7 +215,7 @@ def run_experiment(args):
         
     state_dict = torch.load(f"best_{args.model_type}_model_{args.model_save_path}.pth")
     model.load_state_dict(state_dict)
-    print(f"\n Successfully loaded best model")
+    print(f"Successfully loaded best model")
     trainer = Optim.ModelTrain(model = model,
                                qaoa_layers = args.qaoa_layers,
                                lr_sequence = args.lr_sequence,
@@ -230,23 +230,23 @@ def run_experiment(args):
     for i in range(len(test_set)):
         graph_test_result = {}
         test_graph = test_set[i]
-    
-        sequence_predicted_params_list, sequence_predicted_energies_list = trainer.evaluate(
+        print(f"\n--- Sequence model optimization (Phase I) ---")
+        sequence_predicted_params_list, sequence_predicted_cost_list = trainer.evaluate(
             graph_data = test_graph,
             num_rnn_iteration = args.steps_recurrent_loop_test)
     
         print(f"\n--- Test Graph {i+1}/{len(test_set)} (Nodes: {len(test_graph.nodes)}, Edges: {len(test_graph.edges)}) ---")
-        print(f"{args.model_type} predicted energies:{sequence_predicted_params_list}")
-        print(f"{args.model_type} predicted params:{sequence_predicted_energies_list[-1]}")
+        print(f"{args.model_type} predicted cost:{sequence_predicted_cost_list}")
+        print(f"{args.model_type} predicted params:{sequence_predicted_params_list[-1]}")
        
         # use sequence model output as initial params for QAOA to optimize
-        print(f"\n--- QAOA optimization after model (Phase II) ---")
+        print(f"\n--- QAOA optimization after sequence model (Phase II) ---")
         sequence_qaoa = QAOA.QAOA(graph = test_graph, 
                                  n_layers = args.qaoa_layers, 
                                  with_meta =  True)
         
         opt_sequence_qaoa = QAOA.QAOAptimizer(sequence_qaoa)
-        conv_iter_sequence, final_params_sequence, final_energy_sequence, params_history_sequence, cost_history_sequence = opt_sequence_qaoa.run_optimization(
+        conv_iter_sequence, final_params_sequence, final_cost_sequence, params_history_sequence, cost_history_sequence = opt_sequence_qaoa.run_optimization(
             initial_params = sequence_predicted_params_list[-1],
             optimizer = args.qaoa_optimizer,
             max_iter = args.max_iter_qaoa,
@@ -264,7 +264,7 @@ def run_experiment(args):
                                    with_meta =  False)
         
         opt_rand_qaoa = QAOA.QAOAptimizer(qaoa_test_rand)
-        conv_iter_rand, final_params_rand, final_energy_rand, params_history_rand, cost_history_rand = opt_rand_qaoa.run_optimization(
+        conv_iter_rand, final_params_rand, final_cost_rand, params_history_rand, cost_history_rand = opt_rand_qaoa.run_optimization(
             initial_params = params_rand,
             optimizer = args.qaoa_optimizer,
             max_iter = args.max_iter_qaoa,
@@ -280,18 +280,18 @@ def run_experiment(args):
         plt.figure(figsize = (15,8))
         font = {'size':16}
         plt.rc('font', **font)
-        plt.plot(np.arange(0, args.steps_recurrent_loop_test), sequence_predicted_energies_list, label=f'{args.model_type}-QAOA', ls="dashed", color = "darkgreen", markersize = 9)
+        plt.plot(np.arange(0, args.steps_recurrent_loop_test), sequence_predicted_cost_list, label=f'{args.model_type}-QAOA', ls="dashed", color = "darkgreen", markersize = 9)
         plt.plot(np.arange(args.steps_recurrent_loop_test, args.steps_recurrent_loop_test + len(cost_history_sequence)), cost_history_sequence, label=f'QAOA after {args.model_type}', color = "darkgreen", markersize = 9)
-        plt.plot(np.arange(0, args.max_iter_qaoa+1), cost_history_rand, label='QAOA, Random', color = "darkred", markersize = 9)
+        plt.plot(np.arange(0, len(cost_history_rand)), cost_history_rand, label='QAOA, Random', color = "darkred", markersize = 9)
         plt.xlabel("Iteration")
         plt.ylabel("Loss")
         plt.title(f"num_node ={len(test_graph.nodes)}, num_edge = {len(test_graph.edges)}")
-        plt.xlim([0-5, args.max_iter_qaoa + args.steps_recurrent_loop_test])
+        plt.xlim([0-5, args.max_iter_qaoa + args.steps_recurrent_loop_test + 5])
         plt.legend()
         plt.show()
 
         graph_test_result = {
-            'Phase I': pd.Series(sequence_predicted_energies_list),
+            'Phase I': pd.Series(sequence_predicted_cost_list),
             'Phase II':pd.Series(cost_history_sequence),
             'Random': pd.Series(cost_history_rand),
             }

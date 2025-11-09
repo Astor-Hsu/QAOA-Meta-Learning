@@ -41,7 +41,7 @@ class L2L_FWP(nn.Module):
         elif self.mapping_type == "ID":
             self.mapping = nn.Identity().to(device)
 
-    def forward(self, molecule_cost, num_iteration, intermediate_steps=False):
+    def forward(self, graph_cost, num_iteration, intermediate_steps=False):
         current_cost = torch.zeros((1, 1), dtype=torch.float32).to(device)
         current_params = torch.zeros((1, self.input_feature_dim), dtype=torch.float32).to(device)
 
@@ -58,7 +58,7 @@ class L2L_FWP(nn.Module):
             new_params = self.fwp(new_input)  # (batch, a_dim)
 
             params = self.mapping(new_params).to(device)
-            _cost = molecule_cost(params.squeeze(0).to(device))
+            _cost = graph_cost(params.squeeze(0).to(device))
             new_cost = torch.as_tensor(_cost, dtype=torch.float32, device=device).view(1, 1)      
             param_outputs.append(params)
             cost_outputs.append(new_cost)
