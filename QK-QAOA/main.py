@@ -51,7 +51,7 @@ parser.add_argument('--backend_QAOA', type=str, default='default.qubit', help='P
 parser.add_argument('--dataset_save_path', type=str, default='datasets.pkl', help='Path to load the dataset')
 # train arg
 parser.add_argument('--model_type', type=str, required=True, help='Model type to train (e.g., LSTM, QK, QLSTM, FWP)')
-parser.add_argument('--mapping_type', type=str, required=True, help='Mapping type (e.g., Linear, ID)')
+parser.add_argument('--mapping_type', type=str, default='ID', help='Mapping type (e.g., Linear, ID)')
 parser.add_argument('--layers', type=int, default=1, help='Number of sequence model layers')
 parser.add_argument('--input_feature_dim', type=int, default=2, help='Input feature dimension for the model')
 parser.add_argument('--max_total_params', type=int, default=2, help='Max total parameters for QAOA ansatz')
@@ -68,7 +68,7 @@ parser.add_argument('--time_out', type=int, default=2*60*60, help='Timeout in se
 parser.add_argument('--continue_train', type = bool,default = False, help='whether continue training from existing model')
 parser.add_argument('--load_path', type=str, default=None, help='Path to load a pre-trained model')
 # QAOA MaxxCut arg
-parser.add_argument('--qaoa_optimizer', type=str, default='ADAM', help='Optimizer for QAOA optimization e.g. ADAM or SGD')
+parser.add_argument('--qaoa_optimizer', type=str, default='SGD', help='Optimizer for QAOA optimization e.g. ADAM or SGD')
 parser.add_argument('--lr_qaoa', type=float, default=1e-3, help='Learning rate for QAOA optimization')
 parser.add_argument('--max_iter_qaoa', type=int, default=300, help='Max iterations for QAOA optimization')
 parser.add_argument('--conv_tol_qaoa', type=float, default=1e-6, help='Convergence tolerance for QAOA optimization')
@@ -145,7 +145,7 @@ def build_and_train_model(args,
                         backend = backend_sequence,
                         qubits = qubits,
                         )
-    elif model_type == "FWP":
+    elif model_type == "QFWP":
         model = L2L_FWP.L2L_FWP(mapping_type = mapping_type,
                                  layers=layers,
                                  input_feature_dim=input_feature_dim,
@@ -162,7 +162,7 @@ def build_and_train_model(args,
     
     print(f"--- Model Summary ---")
     print(model)
-    if model_type == "FWP":
+    if model_type == "QFWP":
         model_params = sum(p.numel() for p in model.fwp.parameters())
     else: 
         model_params = sum(p.numel() for p in model.sequence.parameters())
