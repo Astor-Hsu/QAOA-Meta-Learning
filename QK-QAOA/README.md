@@ -88,6 +88,7 @@ python main.py -- Train_and_Test False --Only_test True --dataset_save_path [dat
 
 ### Results
 The model generates three main result file: 
+
 the file include NumPy array of sequence model output and QAOA parameter history during test 
 ```
 QAOA_Random_node_[nodes_of_the_graph]_edge_[edges_of_the_graph]_[i].npz
@@ -102,6 +103,7 @@ Result_[args.Results_save_path]_node_[nodes_of_the_graph]_edges_[edges_of_the_gr
 ```
 
 When saving model checkpoints, the folder follows this format:
+
 the model with the best validation performance 
 ```
 best_[args.model_type]_model_[args.model_save_path].pth
