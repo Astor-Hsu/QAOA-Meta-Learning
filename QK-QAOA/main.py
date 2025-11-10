@@ -43,12 +43,16 @@ parser = argparse.ArgumentParser(description='QAOA with sequence models training
 parser.add_argument('--Train_and_Test', type = bool, default = True, help='whether train and test the model')
 parser.add_argument('--Only_train', type = bool, default = False, help='whether only train the model without testing')
 parser.add_argument('--Only_test', type = bool, default = False, help='whether only test the model without training, and you have the model params, type path in load_path')
+parser.add_argument('--device', type=str, default='cpu', help='Device to use for computation (e.g., cpu, cuda:0)')
+parser.add_argument('--backend_sequence', type=str, default='lightning.qubit', help='PennyLane backend of sequence model to use for quantum simulations')
+parser.add_argument('--backend_QAOA', type=str, default='default.qubit', help='PennyLane backend of QAOA to use for quantum simulations')
 parser.add_argument('--dataset_save_path', type=str, default='datasets.pkl', help='Path to load the dataset')
 parser.add_argument('--model_type', type=str, required=True, help='Model type to train (e.g., LSTM, QK, QLSTM, FWP)')
 parser.add_argument('--mapping_type', type=str, default='Linear', help='Mapping type (e.g., Linear, ID)')
 parser.add_argument('--layers', type=int, default=1, help='Number of sequence model layers')
 parser.add_argument('--input_feature_dim', type=int, default=2, help='Input feature dimension for the model')
 parser.add_argument('--max_total_params', type=int, default=2, help='Max total parameters for QAOA ansatz')
+parser.add_argument('--qubits', type=int, default=4, help='Number of qubits for QKLSTM or QLSTM')
 parser.add_argument('--loss_function_type', type=str, default='weighted', help='Loss function type (e.g., weighted, observed improvement)')
 parser.add_argument('--qaoa_layers', type=int, default=1, help='Number of layers for QAOA')
 parser.add_argument('--lr_sequence', type=float, default=6e-6, help='Learning rate for sequence model')
@@ -106,6 +110,10 @@ def build_and_train_model(args,
           model: the trained model
           trainer: the trainer object
     """
+    device = args.device
+    backend_sequence = args.backend_sequence
+    backend_QAOA = args.backend_QAOA
+    qubits = args.qubits
     model_type = args.model_type
     mapping_type = args.mapping_type
     layers = args.layers
@@ -130,6 +138,9 @@ def build_and_train_model(args,
                         input_feature_dim = input_feature_dim,
                         max_total_params = max_total_params,
                         loss_function_type = loss_function_type,
+                        device = device,
+                        backend = backend_sequence,
+                        qubits = qubits,
                         )
     elif model_type == "FWP":
         model = L2L_FWP.L2L_FWP(mapping_type = mapping_type,
@@ -137,6 +148,8 @@ def build_and_train_model(args,
                                  input_feature_dim=input_feature_dim,
                                  max_total_params=max_total_params,
                                  loss_function_type=loss_function_type,
+                                 device = device,
+                                 backend = backend_sequence,
                                  )
     
     if continue_train == True:
@@ -160,6 +173,8 @@ def build_and_train_model(args,
                                lr_sequence = lr_sequence,
                                lr_mapping= lr_mapping,
                                num_rnn_iteration = steps_recurrent_loop_train,
+                               device = device,
+                               backend = backend_QAOA,
                                )
     
     print(f"\n--- Training {model_type} Model ---")
@@ -209,6 +224,9 @@ def run_experiment(args):
                             input_feature_dim = args.input_feature_dim,
                             max_total_params = args.max_total_params,
                             loss_function_type = args.loss_function_type,
+                            device = args.device,
+                            backend = args.backend_sequence,
+                            qubits = args.qubits,
                             )
     
         elif args.model_type == "QFWP":
@@ -217,6 +235,8 @@ def run_experiment(args):
                                     input_feature_dim = args.input_feature_dim,
                                     max_total_params = args.max_total_params,
                                     loss_function_type = args.loss_function_type,
+                                    device = args.device,
+                                    backend = args.backend_sequence,
                                     )
         
         if args.Train_and_Test:
@@ -231,6 +251,8 @@ def run_experiment(args):
                                lr_sequence = args.lr_sequence,
                                lr_mapping = args.lr_mapping,
                                num_rnn_iteration = args.steps_recurrent_loop_train,
+                               device = args.device,
+                               backend = args.backend_QAOA,
                                )
     
         print(f"\n--- Evaluating Model ---")
@@ -253,7 +275,8 @@ def run_experiment(args):
             print(f"\n--- QAOA optimization after sequence model (Phase II) ---")
             sequence_qaoa = QAOA.QAOA(graph = test_graph, 
                                       n_layers = args.qaoa_layers, 
-                                      with_meta =  True)
+                                      with_meta =  True,
+                                      backend = args.backend_QAOA)
         
             opt_sequence_qaoa = QAOA.QAOAptimizer(sequence_qaoa)
             conv_iter_sequence, final_params_sequence, final_cost_sequence, params_history_sequence, cost_history_sequence = opt_sequence_qaoa.run_optimization(
@@ -271,7 +294,8 @@ def run_experiment(args):
             params_rand = torch.rand(args.input_feature_dim, dtype = torch.float32)
             qaoa_test_rand = QAOA.QAOA(graph = test_graph, 
                                        n_layers = args.qaoa_layers, 
-                                        with_meta =  False)
+                                       with_meta =  False,
+                                       backend = args.backend_QAOA)
         
             opt_rand_qaoa = QAOA.QAOAptimizer(qaoa_test_rand)
             conv_iter_rand, final_params_rand, final_cost_rand, params_history_rand, cost_history_rand = opt_rand_qaoa.run_optimization(
