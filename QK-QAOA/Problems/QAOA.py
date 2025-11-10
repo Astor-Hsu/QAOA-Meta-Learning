@@ -5,16 +5,19 @@ import torch.optim as optim
 
 class QAOA:
 
-    def __init__(self, graph, n_layers=1, with_meta = True):
+    def __init__(self, graph, n_layers=1, with_meta = True, backend = "default.qubit"):
         self.graph = graph
         self.n_layers = n_layers
         self.total_qaoa_params = 2 * self.n_layers
         self.wires = range(len(self.graph.nodes))
         self.cost_h, self.mixer_h = qaoa.maxcut(self.graph)
         self.with_meta = with_meta
+        self.backend = backend
 
-        self.device = qml.device("default.qubit", wires=len(self.wires))
+        self.device = qml.device(self.backend, wires=len(self.wires))
         self.qnode = qml.QNode(self._circuit, self.device, interface = "torch", diff_method = "backprop")
+        if self.backend == "lightning.gpu": 
+          self.qnode = qml.QNode(self._circuit, self.device, interface = "torch", diff_method = "adjoint")
 
     def _qaoa_layer(self, gamma, alpha):
       qaoa.cost_layer(gamma, self.cost_h)

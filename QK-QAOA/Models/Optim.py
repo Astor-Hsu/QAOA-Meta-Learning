@@ -9,13 +9,13 @@ import torch.optim as optim
 import numpy as np 
 import time
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+#device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class ModelTrain:
     """
     Train and evaluate model
     """
-    def __init__(self, model, qaoa_layers, lr_sequence = 0.01, lr_mapping = 0.01, num_rnn_iteration = 10):
+    def __init__(self, model, qaoa_layers, lr_sequence = 0.01, lr_mapping = 0.01, num_rnn_iteration = 10, device = 'cpu'):
         """
         Args:
          model [model]: the model defined by L2L or L2L_FWP
@@ -26,7 +26,8 @@ class ModelTrain:
          optimizer: RMSprop
         """
         self.model = model
-        self.model.to(device)
+        self.device = device
+        self.model.to( self.device)
         self.qaoa_layers = qaoa_layers
         self.lr_sequence = lr_sequence
         self.lr_mapping = lr_mapping
@@ -56,7 +57,7 @@ class ModelTrain:
 
     def train_step(self, loss_qnode, num_rnn_iteration):
         self.optimizer.zero_grad()
-        loss = self.model(loss_qnode, num_rnn_iteration).to(device)
+        loss = self.model(loss_qnode, num_rnn_iteration).to(self.device)
         loss.backward()
         self.optimizer.step()
 
