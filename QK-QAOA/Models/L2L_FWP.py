@@ -35,13 +35,13 @@ class L2L_FWP(nn.Module):
             n_layers=self.layers,
             backend=self.backend ,
             device=self.device 
-        ).to(self.device )
+        ).to(self.device)
 
         # define mapping model
         if self.mapping_type == "Linear":
             self.mapping = nn.Linear(self.input_feature_dim, self.max_total_params).to(self.device )
         elif self.mapping_type == "ID":
-            self.mapping = nn.Identity().to(self.device )
+            self.mapping = nn.Identity().to(self.device)
 
     def forward(self, graph_cost, num_iteration, intermediate_steps=False):
         current_cost = torch.zeros((1, 1), dtype=torch.float32).to(self.device )

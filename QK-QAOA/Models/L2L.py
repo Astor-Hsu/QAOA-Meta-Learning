@@ -13,7 +13,8 @@ class L2L(nn.Module):
     """
     Sequence-QAOA recurrent model
     """
-    def __init__(self, model_type = "QK", mapping_type = "ID",layers = 1, input_feature_dim = 0, max_total_params = 0, loss_function_type = "weighted", device = 'cpu'):
+    def __init__(self, model_type = "QK", mapping_type = "ID",layers = 1, input_feature_dim = 0, max_total_params = 0, 
+                 loss_function_type = "weighted", device = 'cpu', backend = "lightning.qubit", qubits = 4):
         super(L2L, self).__init__()
         """
         Define model
@@ -23,6 +24,9 @@ class L2L(nn.Module):
           input_feature_dim [int]: the number of params for LSTM output to QAOA ansatz
           max_total_params [int]: the max numbers for QAOA we need for this experiment
           loss_function_type (str): the loss function type, weighted or observed improvement (define by Verdon's papaer)
+          device (str): device for training, 'cpu' or 'cuda:0'
+          backend (str): the quantum backend for QKLSTM or QLSTM
+          qubits (int): the number of qubits for QKLSTM or QLSTM
 
          Outputs:
           self.sequence [model]: LSTM, QK-LSTM, QLSTM
@@ -35,6 +39,8 @@ class L2L(nn.Module):
         self.loss_function_type = loss_function_type
         self.layers = layers
         self.device = device
+        self.backend = backend
+        self.qubits = qubits
         
         """
          input_feature_dim + 1 (cost) ->  sequence model -> input_feature_dim -> linear model -> max_total_params
@@ -46,14 +52,19 @@ class L2L(nn.Module):
                                 batch_first = True).to(self.device)
         elif self.model_type == "QK":
             self.sequence = QKLSTM.QKLSTM(input_size = self.input_feature_dim+1,
-                               hidden_size = self.input_feature_dim+1, 
-                               n_qubits = 4,
-                               n_qlayers = self.layers)
+                                          hidden_size = self.input_feature_dim+1, 
+                                          n_qubits = self.qubits,
+                                          n_qlayers = self.layers,
+                                          backend = self.backend,
+                                          device = self.device,)
         elif self.model_type == "QLSTM":
             self.sequence = QLSTM.QLSTM(input_size = self.input_feature_dim+1 ,
-                               hidden_size = self.input_feature_dim+1,
-                               n_qubits = 4,
-                               n_qlayers = self.layers)
+                                        hidden_size = self.input_feature_dim+1,
+                                        n_qubits = self.qubits,
+                                        n_qlayers = self.layers,
+                                        backend = self.backend,
+                                        device = self.device,
+                                        )
         
         if self.mapping_type == "Linear":
             self.mapping = nn.Linear(self.input_feature_dim+1, self.max_total_params, bias = True).to(self.device)

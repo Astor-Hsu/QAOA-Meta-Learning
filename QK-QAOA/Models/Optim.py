@@ -15,7 +15,7 @@ class ModelTrain:
     """
     Train and evaluate model
     """
-    def __init__(self, model, qaoa_layers, lr_sequence = 0.01, lr_mapping = 0.01, num_rnn_iteration = 10, device = 'cpu'):
+    def __init__(self, model, qaoa_layers, lr_sequence = 0.01, lr_mapping = 0.01, num_rnn_iteration = 10, device = 'cpu', backend = "default.qubit"):
         """
         Args:
          model [model]: the model defined by L2L or L2L_FWP
@@ -23,6 +23,8 @@ class ModelTrain:
          lr_sequence [float]: learning rate of sequence model
          lr_mapping [float]: learning rate of linear model
          num_rnn_iteration [int]: number of sequence model Phase I recurrent step (T)
+         device [str]: device for model
+         backend [str]: pennylane backend for QAOA
          optimizer: RMSprop
         """
         self.model = model
@@ -32,6 +34,7 @@ class ModelTrain:
         self.lr_sequence = lr_sequence
         self.lr_mapping = lr_mapping
         self.num_rnn_iteration = num_rnn_iteration
+        self.backend = backend
         
         if self.model.model_type == "FWP":
             learning_rate = [
@@ -83,11 +86,13 @@ class ModelTrain:
 
         train_cost = [QAOA.QAOA(graph = g,
                                 n_layers = self.qaoa_layers,
-                                with_meta=  True).get_loss_function() for g in train_data]
+                                with_meta=  True, 
+                                backend = self.backend).get_loss_function() for g in train_data]
         
         val_cost = [QAOA.QAOA(graph = g,
                               n_layers = self.qaoa_layers,
-                              with_meta=  True).get_loss_function() for g in val_data]
+                              with_meta=  True,
+                              backend = self.backend).get_loss_function() for g in val_data]
 
         print(f"\n--- Starting {self.model.model_type} Model Training ---")
         for epoch in range(epochs):
@@ -178,7 +183,8 @@ class ModelTrain:
         print(f"\n--- Starting {self.model.model_type} Model Testing ---")
         qaoa = QAOA.QAOA(graph = graph_data, 
                          n_layers = self.qaoa_layers, 
-                         with_meta=  True)
+                         with_meta=  True,
+                         backend = self.backend)
         
         loss_qnode = qaoa.get_loss_function()
         with torch.no_grad():
