@@ -10,6 +10,17 @@ This is the offical repository of the paper "Meta-Learning for Quantum Optimizat
 
 The Quantum Approximate Optimization Algorithm (QAOA) is a leading approach for solving combinatorial optimization problems on near-term quantum processors. However, finding good variational parameters remains a significant challenge due to the non-convex energy landscape, often resulting in slow convergence and poor solution quality. In this work, we propose a quantum meta-learning framework that trains advanced quantum sequence models to generate effective parameter initialization policies. We investigate four classical or quantum sequence models, including the Quantum Kernel-based Long Short-Term Memory (QK-LSTM), as learned optimizers in a "learning to learn" paradigm. Our numerical experiments on the Max-Cut problem demonstrate that the QK-LSTM optimizer achieves superior performance, obtaining the highest approximation ratios and exhibiting the fastest convergence rate across all tested problem sizes ($n=10$ to $13$). Crucially, the QK-LSTM model achieves perfect parameter transferability by synthesizing a single, fixed set of near-optimal parameters, leading to a remarkable sustained acceleration of convergence even when generalizing to larger problems. This capability, enabled by the compact and expressive power of the quantum kernel architecture, underscores its effectiveness. The QK-LSTM, with only 43 trainable parameters, substantially outperforms the classical LSTM (56 parameters) and other quantum sequence models, establishing a robust pathway toward highly efficient parameter initialization for variational quantum algorithms in the NISQ era.
 
+## Introduction
+
+In this project, we address a major challenge in running variational quantum algorithma (VQA) like QAOA: finding the good starting point. The cost landscape for these algorithms is often like a rocky, unpredictable terrain, making the traditional search for the best "angles" (parameters) slow and inconsistent. Our appoach is inspired by the meta-learning framework developed by [Verdon](https://arxiv.org/abs/1907.05415) et al., which focuses on learning to learn optimization strategies. We extend this paradigm by training an intelligent sequence model—like a skilled quantum coach—to guide the optimization process. This coach is trained on many different random graph instances from the Max-Cut problem. Its job is to observe the current problem structure and quickly predict a highly effective initial parameter set. 
+
+Our optimization follows a two-phase strategy:
+
+1.  Phase I (Sequence Model Guidance): The trained sequence model is used as a fast, black-box controller to optimize the QAOA parameters for a few initial steps.
+2.  Phase II (Refinement): Once the sequence model has landed the parameters in a good region of the landscape, we switch to a common, robust optimizer (like ADAM) for fine-tuning and reaching the final minimum.
+
+By employing both classical and quantum sequence models (including our novel QK-LSTM), we aim to find a universally good starting point that dramatically accelerates convergence across many different problem sizes.
+
 <div style="display: flex; align-items: center;">
 <div style="flex: 1;">
 
