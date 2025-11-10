@@ -14,6 +14,11 @@ The Quantum Approximate Optimization Algorithm (QAOA) is a leading approach for 
 
 In this project, we address a major challenge in running variational quantum algorithma (VQA) like QAOA: finding the good starting point. The cost landscape for these algorithms is often like a rocky, unpredictable terrain, making the traditional search for the best "angles" (parameters) slow and inconsistent. Our appoach is inspired by the meta-learning framework developed by [Verdon](https://arxiv.org/abs/1907.05415) et al., which focuses on learning to learn optimization strategies. We extend this paradigm by training an intelligent sequence model—like a skilled quantum coach—to guide the optimization process. This coach is trained on many different random graph instances from the Max-Cut problem. Its job is to observe the current problem structure and quickly predict a highly effective initial parameter set. 
 
+<br>
+<p align="center">
+  <img src="img/L2L.png" alt="L2L" width="100%" height="auto">
+</p>
+
 Our optimization follows a two-phase strategy:
 
 1.  Phase I (Sequence Model Guidance): The trained sequence model is used as a fast, black-box controller to optimize the QAOA parameters for a few initial steps.
