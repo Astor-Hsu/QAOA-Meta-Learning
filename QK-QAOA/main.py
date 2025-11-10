@@ -43,12 +43,15 @@ parser = argparse.ArgumentParser(description='QAOA with sequence models training
 parser.add_argument('--Train_and_Test', type = bool, default = True, help='whether train and test the model')
 parser.add_argument('--Only_train', type = bool, default = False, help='whether only train the model without testing')
 parser.add_argument('--Only_test', type = bool, default = False, help='whether only test the model without training, and you have the model params, type path in load_path')
+# device and backend arg
 parser.add_argument('--device', type=str, default='cpu', help='Device to use for computation (e.g., cpu, cuda:0)')
 parser.add_argument('--backend_sequence', type=str, default='lightning.qubit', help='PennyLane backend of sequence model to use for quantum simulations')
 parser.add_argument('--backend_QAOA', type=str, default='default.qubit', help='PennyLane backend of QAOA to use for quantum simulations')
+# data load arg
 parser.add_argument('--dataset_save_path', type=str, default='datasets.pkl', help='Path to load the dataset')
+# train arg
 parser.add_argument('--model_type', type=str, required=True, help='Model type to train (e.g., LSTM, QK, QLSTM, FWP)')
-parser.add_argument('--mapping_type', type=str, default='Linear', help='Mapping type (e.g., Linear, ID)')
+parser.add_argument('--mapping_type', type=str, required=True, help='Mapping type (e.g., Linear, ID)')
 parser.add_argument('--layers', type=int, default=1, help='Number of sequence model layers')
 parser.add_argument('--input_feature_dim', type=int, default=2, help='Input feature dimension for the model')
 parser.add_argument('--max_total_params', type=int, default=2, help='Max total parameters for QAOA ansatz')
@@ -64,12 +67,12 @@ parser.add_argument('--model_save_path', type=str, default='models_default', hel
 parser.add_argument('--time_out', type=int, default=2*60*60, help='Timeout in seconds for training')
 parser.add_argument('--continue_train', type = bool,default = False, help='whether continue training from existing model')
 parser.add_argument('--load_path', type=str, default=None, help='Path to load a pre-trained model')
-# --- QAOA Optimization Arguments ---
+# QAOA MaxxCut arg
 parser.add_argument('--qaoa_optimizer', type=str, default='ADAM', help='Optimizer for QAOA optimization e.g. ADAM or SGD')
 parser.add_argument('--lr_qaoa', type=float, default=1e-3, help='Learning rate for QAOA optimization')
 parser.add_argument('--max_iter_qaoa', type=int, default=300, help='Max iterations for QAOA optimization')
 parser.add_argument('--conv_tol_qaoa', type=float, default=1e-6, help='Convergence tolerance for QAOA optimization')
-# --- Testing Arguments ---
+# test arg
 parser.add_argument('--steps_recurrent_loop_test', type=int, default=10, help='Number of recurrent steps during testing (Phase I)')
 parser.add_argument('--Results_save_path', type=str, default='results_default', help='Path to save the test results')
 
