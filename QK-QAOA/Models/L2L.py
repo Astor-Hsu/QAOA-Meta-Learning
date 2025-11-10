@@ -7,13 +7,13 @@ import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np 
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+#device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     
 class L2L(nn.Module):
     """
     Sequence-QAOA recurrent model
     """
-    def __init__(self, model_type = "QK", mapping_type = "ID",layers = 1, input_feature_dim = 0, max_total_params = 0, loss_function_type = "weighted"):
+    def __init__(self, model_type = "QK", mapping_type = "ID",layers = 1, input_feature_dim = 0, max_total_params = 0, loss_function_type = "weighted", device = 'cpu'):
         super(L2L, self).__init__()
         """
         Define model
@@ -34,6 +34,7 @@ class L2L(nn.Module):
         self.max_total_params = max_total_params
         self.loss_function_type = loss_function_type
         self.layers = layers
+        self.device = device
         
         """
          input_feature_dim + 1 (cost) ->  sequence model -> input_feature_dim -> linear model -> max_total_params
@@ -42,7 +43,7 @@ class L2L(nn.Module):
             self.sequence = nn.LSTM(input_size = self.input_feature_dim + 1,
                                 hidden_size = self.input_feature_dim,
                                 num_layers = self.layers,
-                                batch_first = True).to(device)
+                                batch_first = True).to(self.device)
         elif self.model_type == "QK":
             self.sequence = QKLSTM.QKLSTM(input_size = self.input_feature_dim+1,
                                hidden_size = self.input_feature_dim+1, 
@@ -55,15 +56,15 @@ class L2L(nn.Module):
                                n_qlayers = self.layers)
         
         if self.mapping_type == "Linear":
-            self.mapping = nn.Linear(self.input_feature_dim+1, self.max_total_params, bias = True).to(device)
+            self.mapping = nn.Linear(self.input_feature_dim+1, self.max_total_params, bias = True).to(self.device)
         elif self.mapping_type == "ID":
-          self.mapping = nn.Identity().to(device)
+          self.mapping = nn.Identity().to(self.device)
         
 
     def forward(self, graph_cost, num_rnn_iteration, intermediate_steps = False):
 
-        current_cost = torch.zeros((1, 1), dtype = torch.float32).to(device)
-        current_params = torch.zeros((1, self.input_feature_dim), dtype = torch.float32).to(device)
+        current_cost = torch.zeros((1, 1), dtype = torch.float32).to(self.device)
+        current_params = torch.zeros((1, self.input_feature_dim), dtype = torch.float32).to(self.device)
 
         if self.model_type == "QK":
             hidden_state_size = self.input_feature_dim + 1
@@ -72,8 +73,8 @@ class L2L(nn.Module):
         else:
             hidden_state_size = self.input_feature_dim
 
-        current_h = torch.zeros((self.sequence.num_layers, 1, hidden_state_size), dtype = torch.float32).to(device)
-        current_c = torch.zeros((self.sequence.num_layers, 1, hidden_state_size), dtype = torch.float32).to(device)
+        current_h = torch.zeros((self.sequence.num_layers, 1, hidden_state_size), dtype = torch.float32).to(self.device)
+        current_c = torch.zeros((self.sequence.num_layers, 1, hidden_state_size), dtype = torch.float32).to(self.device)
 
         param_outputs = []
         cost_outputs = []
@@ -84,10 +85,10 @@ class L2L(nn.Module):
            
             new_params = new_params.squeeze(1) 
             
-            params = self.mapping(new_params.squeeze(1)).to(device)
+            params = self.mapping(new_params.squeeze(1)).to(self.device)
             
-            _cost = graph_cost(params.squeeze(0).to(device))
-            new_cost = torch.as_tensor(_cost, dtype=torch.float32, device=device).view(1,1)
+            _cost = graph_cost(params.squeeze(0).to(self.device))
+            new_cost = torch.as_tensor(_cost, dtype=torch.float32, device=self.device).view(1,1)
             
             param_outputs.append(params)
             cost_outputs.append(new_cost)
@@ -112,7 +113,7 @@ class L2L(nn.Module):
             loss = loss/len(cost_outputs)
 
         elif self.loss_function_type == "observed improvement":
-            cost = torch.stack(cost_outputs).to(device)
+            cost = torch.stack(cost_outputs).to(self.device)
             zero = torch.tensor([0.0])
             for t in range(1, len(cost_outputs)):
                 f_j = torch.min(cost[:t])
