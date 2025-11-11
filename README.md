@@ -139,4 +139,4 @@ the model at the end of the last training epoch
 
 <h2 id="authors">🖌️ Authors</h2>
 
-[Yu-Cheng Lin](https://github.com/Xiezhihaa), [Yu Hsu](https://github.com/Astor-Hsu).
+[Yu-Cheng Lin](https://github.com/Xiezhihaa), [Yu Hsu](https://github.com/Astor-Hsu), and [Samuel Yen-Chi Chen](https://github.com/ycchen1989).
