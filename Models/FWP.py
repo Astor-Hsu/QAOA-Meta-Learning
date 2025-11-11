@@ -3,6 +3,14 @@ import torch.nn as nn
 import pennylane as qml
 from functools import partial
 
+# ==============================================================================
+# Code adapted from:
+# Title: Quantum_FWP
+# Author: Samuel Yen-Chi Chen
+# Source: https://github.com/ycchen1989/Quantum_FWP
+# Paper: Learning to Program Variational Quantum Circuits with Fast Weights
+# ==============================================================================
+
 ######################
 # VQC 
 ######################
