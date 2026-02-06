@@ -131,11 +131,21 @@ the model at the end of the last training epoch
 
 
 ## News
-(Leave this section for future announcements.)
+- **2025.02.06** – 🎉 Our paper has been accepted by the *International Conference on Quantum Communications, Networking, and Computing (QCNC 2026)*.
+
 
 <h2 id="citation">🔖 Citation</h2>
 
-📚 If you find our work or this code to be useful in your own research, please kindly cite our paper :-)
+📚 If you find our work or this code useful in your research, please consider citing our paper:
+
+```bibtex
+@article{lin2025meta,
+  title   = {Meta-Learning for Quantum Optimization via Quantum Sequence Model},
+  author  = {Lin, Yu-Cheng and Hsu, Yu-Chao and Chen, Samuel Yen-Chi},
+  journal = {arXiv preprint arXiv:2512.05058},
+  year    = {2025}
+}
+```
 
 <h2 id="authors">🖌️ Authors</h2>
 
